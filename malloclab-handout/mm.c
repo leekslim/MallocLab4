@@ -95,7 +95,15 @@ void *mm_realloc(void *ptr, size_t size)
     return newptr;
 }
 
+/*
+* L: Heap Checker as per instructions, should be called at various points to check heap
+*/
 
+int mm_check(void) {
+	int x=1; //initialize non-zero value, should return 0 if error, and print error messages before that
+	//all checking code should go here, printing error message if heap not consistent, and changing x to 0
+	return x;
+}
 
 
 
