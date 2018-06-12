@@ -102,8 +102,8 @@ void *mm_malloc(size_t size)
 	if (size <= DSIZE) // smaller than regular block size of payload
 		asize = 2*DSIZE;
 	else // larger than regular block size of payload
-	asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE); //L: don't get why this is multiplaying by and dividing by DSIZE
-
+	asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE); //L: first DSIZE is for footer and header, second DSIZE-1 is for extra space if unaligned
+	// its -1 because size is at least 1 above DSIZE, division mods away unaligned 'remainder', then multiply back
 	/* Search the free list for a fit */
 	if ((bp = find_fit(asize)) != NULL) {
 		place(bp, asize);
