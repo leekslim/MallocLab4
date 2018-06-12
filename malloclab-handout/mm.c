@@ -1,6 +1,6 @@
 /*
  * An implicit free list solution, every block includes a header and footer, and there are simple
- * functions to coalesce, split and free
+ * functions to coalesce, split and free. Realloc does not do anything.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,17 +28,45 @@ team_t team = {
     "eptang@gmail.com"
 };
 
-/* single word (4) or double word (8) alignment */
-#define ALIGNMENT 8
+/* Constants and Macros
+* Various constant sizes and functions to traverse the implicit list
+* are defined, the minimum block size used is 8 bytes
+*/
 
-/* rounds up to the nearest multiple of ALIGNMENT */
-#define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
+/*  based on minimum block size 8 */
+#define WSIZE 4 // size of the header and footer
+#define DSIZE 8 // regular or default block size
+#define CHUNKSIZE 512 // when extending heap
 
+/* pack size bit and allocated bit into same word */
+#define PACK(size, alloc)((size) | (alloc))
 
+/* read or write to mem addr p */
+#define GET(p)	(* (unsigned int *)(p))
+#define PUT(p, val)		(*(unsigned int *)(p) = (val))
+
+/* given addr p, read size bit or allocated bit */
+#define GET_SIZE(p)	(GET(p) & ~0x7)
+#define GET_ALL0C(p) (GET(p) & 0x1)
+
+/* given block ptr bp, compute address of header or footer */
+#define HDRP(bp)	((char *)(bp) - WSIZE) //HDRP means HeaderPointer
+#define FTRP(bp)	((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE) //FTRP means FooterPointer
+
+/* given block ptr bp, compute address of next and previous blocks */
+#define NEXT_BLKP(bp)	((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
+#define PREV_BLKP(bp)	((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
+
+/* old given macros from assignment, can ignore and or delate later
+* #define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
+*
+*
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
+*/
+
 
 /* 
- * mm_init - initialize the malloc package.
+ * mm_init - initialize the malloc package. A 'prologue' and 'epilogue' block is used to account for edge cases
  */
 int mm_init(void)
 {
@@ -46,8 +74,8 @@ int mm_init(void)
 }
 
 /* 
- * mm_malloc - Allocate a block by incrementing the brk pointer.
- *     Always allocate a block whose size is a multiple of the alignment.
+ * mm_malloc - 
+ *
  */
 void *mm_malloc(size_t size)
 {
@@ -62,30 +90,18 @@ void *mm_malloc(size_t size)
 }
 
 /*
- * mm_free - Freeing a block does nothing.
+ * mm_free - 
  */
 void mm_free(void *ptr)
 {
 }
 
 /*
- * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
+ * mm_realloc - 
  */
 void *mm_realloc(void *ptr, size_t size)
 {
-    void *oldptr = ptr;
-    void *newptr;
-    size_t copySize;
-    
-    newptr = mm_malloc(size);
-    if (newptr == NULL)
-      return NULL;
-    copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
-    if (size < copySize)
-      copySize = size;
-    memcpy(newptr, oldptr, copySize);
-    mm_free(oldptr);
-    return newptr;
+    //ss
 }
 
 /*
