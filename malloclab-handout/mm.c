@@ -71,13 +71,14 @@ team_t team = {
 int mm_init(void)
 {
 	/* create the initial empty heap, mem_sbrk returns a generic pointer to the start of the heap, so heap_listp currently holds it */
-	if ((heap_listp = mem_sbrk(4*WSIZE)) == (void *)–1) //L: not entirely sure what this is checking for
+	void *heap_listp = mem_sbrk(4*WSIZE)
+	if (heap_listp == (void *)–1) /* L: not entirely sure what this is checking for */
 		return –1;
 	PUT(heap_listp, 0);
 	PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1));
 	PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1));
 	PUT(heap_listp + (3*WSIZE), PACK(0, 1));
-	heap_listp += (2*WSIZE); //changes local variable holding heap pointer to the start of the actual heap
+	heap_listp += (2*WSIZE); /* changes local variable holding heap pointer to the start of the actual heap */
 	/* extend the empty heap with a free block of CHUNKSIZE bytes */
 	if (extend_heap(CHUNKSIZE/WSIZE) == NULL)
 		return –1;
@@ -99,11 +100,11 @@ void *mm_malloc(size_t size)
 		return NULL;
 	
 	/* adjust block size to include overhead and alignment reqs. */
-	if (size <= DSIZE) // smaller than regular block size of payload
+	if (size <= DSIZE) /* smaller than regular block size of payload */
 		asize = 2*DSIZE;
-	else // larger than regular block size of payload
-	asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE); //L: first DSIZE is for footer and header, second DSIZE-1 is for extra space if unaligned
-	// its -1 because size is at least 1 above DSIZE, division mods away unaligned 'remainder', then multiply back
+	else /* larger than regular block size of payload */
+	asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE); /*L: first DSIZE is for footer and header, second DSIZE-1 is for extra space if unaligned
+	its -1 because size is at least 1 above DSIZE, division mods away unaligned 'remainder', then multiply back */
 	/* Search the free list for a fit */
 	if ((bp = find_fit(asize)) != NULL) {
 		place(bp, asize);
@@ -135,7 +136,7 @@ void mm_free(void *ptr)
  */
 void *mm_realloc(void *ptr, size_t size)
 {
-    //ss
+    /*ss */
 }
 
 /*
@@ -143,8 +144,8 @@ void *mm_realloc(void *ptr, size_t size)
 */
 
 int mm_check(void) {
-	int x=1; //initialize non-zero value, should return 0 if error, and print error messages before that
-	//all checking code should go here, printing error message if heap not consistent, and changing x to 0
+	int x=1; /*initialize non-zero value, should return 0 if error, and print error messages before that
+	all checking code should go here, printing error message if heap not consistent, and changing x to 0 */
 	return x;
 }
 
