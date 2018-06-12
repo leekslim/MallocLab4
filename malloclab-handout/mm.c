@@ -90,19 +90,19 @@ int mm_init(void)
  */
 void *mm_malloc(size_t size)
 {
-	size_t asize;	/* Adjusted block size */
-	size_t extendsize;	/* Amount to extend heap if no fit */
+	size_t asize;	/* adjusted block size */
+	size_t extendsize;	/* amount to extend heap if no fit */
 	char *bp;
 
-	/* Ignore spurious requests */
+	/* ignore spurious requests */
 	if (size == 0)
 		return NULL;
 	
-	/* Adjust block size to include overhead and alignment reqs. */
-	if (size <= DSIZE)
+	/* adjust block size to include overhead and alignment reqs. */
+	if (size <= DSIZE) // smaller than regular block size of payload
 		asize = 2*DSIZE;
-	else
-	asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE);
+	else // larger than regular block size of payload
+	asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE); //L: don't get why this is multiplaying by and dividing by DSIZE
 
 	/* Search the free list for a fit */
 	if ((bp = find_fit(asize)) != NULL) {
@@ -110,7 +110,7 @@ void *mm_malloc(size_t size)
 		return bp;
 	}
 
-	/* No fit found. Get more memory and place the block */
+	/* no fit found. get more memory and place the block */
 	extendsize = MAX(asize,CHUNKSIZE);
 	if ((bp = extend_heap(extendsize/WSIZE)) == NULL)
 		return NULL;
@@ -169,6 +169,7 @@ static void *extend_heap(size_t words)
 	return coalesce(bp);
 }
 
+/* checks for all cases when a block is freed and performs correct coalesce */
 static void *coalesce(void *bp) 
 {
 	size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
@@ -202,6 +203,7 @@ static void *coalesce(void *bp)
 	return bp;
 }
 
+/* used by mm_alloc */
 static void *find_fit(size_t asize)
 {
 	/* First-fit search */
@@ -216,6 +218,7 @@ static void *find_fit(size_t asize)
 	#endif
 }
 
+/* used by mm_alloc */ 
 static void place(void *bp, size_t asize)
 {
 	size_t csize = GET_SIZE(HDRP(bp));
