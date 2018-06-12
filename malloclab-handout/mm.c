@@ -46,8 +46,8 @@ team_t team = {
 #define PUT(p, val)		(*(unsigned int *)(p) = (val))
 
 /* given addr p, read size bit or allocated bit */
-#define GET_SIZE(p)	(GET(p) & ~0x7)
-#define GET_ALL0C(p) (GET(p) & 0x1)
+#define GET_SIZE(p)	(GET(p) & ~0x7) // the block size encapsulated in the first WSIZE-3 bits includes the payload, header and footer
+#define GET_ALL0C(p) (GET(p) & 0x1) // the alloc bit is the LSB of the header/footer
 
 /* given block ptr bp, compute address of header or footer */
 #define HDRP(bp)	((char *)(bp) - WSIZE) //HDRP means HeaderPointer
@@ -70,6 +70,17 @@ team_t team = {
  */
 int mm_init(void)
 {
+	/* create the initial empty heap, mem_sbrk returns a generic pointer to the start of the heap, so heap_listp currently holds it */
+	if ((heap_listp = mem_sbrk(4*WSIZE)) == (void *)–1) //L: not entirely sure what this is checking for
+		return –1;
+	PUT(heap_listp, 0);
+	PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1));
+	PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1));
+	PUT(heap_listp + (3*WSIZE), PACK(0, 1));
+	heap_listp += (2*WSIZE); //changes local variable holding heap pointer to the start of the actual heap
+	/* extend the empty heap with a free block of CHUNKSIZE bytes */
+	if (extend_heap(CHUNKSIZE/WSIZE) == NULL)
+		return –1;
     return 0;
 }
 
@@ -114,10 +125,59 @@ int mm_check(void) {
 	return x;
 }
 
+/* PRIVATE STATIC FUNCTIONS */
+/* extends the heap, checks if enough memory available, and whether size requested is aligned */
+static void *extend_heap(size_t words)
+{
+	char *bp;
+	size_t size;
+	
+	/* allocate an even number of words to maintain alignment */
+	size = (words % 2) ? (words+1) * WSIZE : words * WSIZE;
+	if ((long)(bp = mem_sbrk(size)) == –1)
+		return NULL;
+	
+	/* initialize free block header/footer and the epilogue header */
+	PUT(HDRP(bp), PACK(size, 0));		/* Free block header */
+	PUT(FTRP(bp), PACK(size, 0));		/* Free block footer */
+	PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));	/* New epilogue header */
+	
+	/* coalesce if the previous block was free */
+	return coalesce(bp);
+}
 
+static void *coalesce(void *bp) 
+{
+	size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
+	size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
+	size_t size = GET_SIZE(HDRP(bp));
 
+	if (prev_alloc && next_alloc) {			/* Case 1: no coalesce required */
+		return bp;
+	}
 
+	else if (prev_alloc && !next_alloc) {		/* Case 2: coalesce with next block */
+		size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
+		PUT(HDRP(bp), PACK(size, 0));
+		PUT (FTRP(bp), PACK(size,0));
+	}
 
+	else if (!prev_alloc && next_alloc) {		/* Case 3: coalesce with prev block */
+		size += GET_SIZE(HDRP(PREV_BLKP(bp)));
+		PUT(FTRPCbp), PACKCsize, 0));
+		PUT(HDRP(PREV_BLKP(bp)), PACKCsize, 0));
+		bp = PREV_BLKP(bp);
+	}
+
+	else {						/* Case 4: coalesce with both prev and next block*/
+		size += GET_SIZE(HDRP(PREV_BLKP(bp))) +
+			GET_SIZE(FTRP(NEXT_BLKP(bp)));
+		PUT(HDRP(PREV_BLKP(bp)), PACKCsize, 0));
+		PUT(FTRP(NEXT_BLKP(bp)), PACKCsize, 0));
+		bp = PREV_BLKP(bp);
+	}
+	return bp;
+}
 
 
 
