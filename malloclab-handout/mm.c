@@ -1,7 +1,75 @@
 /*
- * An implicit free list solution, every block includes a header and footer, and there are simple
- * functions to coalesce, split and free. Realloc does not do anything.
- */
+ * mm.c - malloc using the segregated free list method
+ * 
+ * Notes:
+ * 1. Every block has a header and a footer.
+ * 2. The header contains size and allocation flag. 
+ * 3. The footer contains size and allocation flag.
+ * 4. All free block contains pointer to the previous and next free block.
+ * 5. Their previous and next free blocks depend on the size of their block
+ * 6. Blocks are allocated or freed using Last-In-First-Out
+
+ Block information:
+
+ 1. Allocated block has:
+ 	 a) Header is 32 bits long.  Header is actually located 4 bytes before the block pointer
+ 	     size in bit 3 to 31
+ 	     allocated flag in bit 0 (1 for true, 0 for false)
+
+     b) Payload and padding: variable size in 8 bytes increment.
+
+     c) Footer is 32 bits long
+ 	     size in bit 3 to 31
+ 	     allocated flag in bit 0 (1 for true, 0 for false)
+
+            <-------- Bits 31 to 3 ------ > 0
+            +================================+
+ptr-WSIZE-> | Header: size of the block   | A|
+   ptr ---> |--------------------------------|
+            : Payload, size is variable      :
+            : depending on size of block     :
+            : ...                            :
+            |--------------------------------|
+            | Footer: size of the block   | A|
+            +================================+
+            <-------- Bits 31 to 3 ------>  0
+
+
+ 2. Free block has:
+
+ 	 a) Header is 32 bits long
+ 	     size in bit 3 to 31
+ 	     allocated flag in bit 0 (1 for true, 0 for false)
+
+     b) pointer to previous free block
+
+     c) pointer to next free block
+
+     d) Space (variable length)
+
+     e) Footer is 32 bits long
+ 	     size is from bit 3 to 31
+ 	     bit 0 is for the allocated flag (1 for true, 0 for false)
+
+            <-------- Bits 31 to 3 ------ > 0
+            +================================+
+ptr-WSIZE-> | Header: size of the block   | A|
+   ptr ---> |--------------------------------|
+            | ptr to its previous free block |
+ptr+WSIZE-> |--------------------------------|
+            | ptr to its next free block     |
+            |--------------------------------|
+            : additional space not used for  :
+            : free block, size is variable   :
+            : depending on size of free block:
+            : ...                            :
+            |--------------------------------|
+            | Footer: size of the block   | A|
+            +================================+
+            <-------- Bits 31 to 3 ------ > 0
+
+
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -45,6 +113,7 @@ team_t team = {
 /* read or write to mem addr p */
 #define GET(p)	(* (unsigned int *)(p))
 #define PUT(p, val)	(*(unsigned int *)(p) = (val))
+#define PUT_PTR(p, ptr) (*(char **)(p) = ptr) // writing to the prev and next fields of free blocks
 
 /* given addr p, read size bit or allocated bit */
 #define GET_SIZE(p)	(GET(p) & ~0x7) // the block size encapsulated in the first WSIZE-3 bits includes the payload, header and footer
@@ -58,19 +127,72 @@ team_t team = {
 #define NEXT_BLKP(bp)	((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
 #define PREV_BLKP(bp)	((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
+/* Pointer to pointer of free block's previous and next on the segregated list. */
+#define PREV_FREE_BLOCK(ptr) (*(char **)(ptr)) // dereference a pointer to a character pointer, thereby getting the character pointer (prev free)
+#define NEXT_FREE_BLOCK(ptr) (*(char **)(PTR_TO_NEXT_FREE_BLOCK(ptr)))
+
+/* Address of free block's next and previous entries */
+#define PTR_TO_PREV_FREE_BLOCK(ptr) ((char *)(ptr)) // this is just the pointer to the pointer, can be used to compute the address of other info within
+#define PTR_TO_NEXT_FREE_BLOCK(ptr) ((char *)(ptr) + WSIZE)
+
 /* static global scalars */
 static void *firstbp = NULL; /* points to the first block past the prologue after initializing*/
+/* the following are pointers to the last added pointer to that free list based on powers of 2 * DSIZE */
+static void *free0 = NULL; /* pointer to free blocks with payload 1*DSIZE */
+static void *free1 = NULL; /* pointer to free blocks with payload 2*DSIZE */
+static void *free2 = NULL; /* pointer to free blocks with payload (3 to 4)*DSIZE */
+static void *free3 = NULL; /* pointer to free blocks with payload (5 to 8)*DSIZE */
+static void *free4 = NULL; /* pointer to free blocks with payload (9 to infinity)*DSIZE */
 
 /* PRIVATE STATIC FUNCTIONS */
+/* add to appropriate free list */
+static unsigned int LIFO_add(char* bp, size_t size) //argument passed INCLUDES overhead! returns the list no. it was added to
+{ // can probably use a switch statement but it might bug out
+	if (size > 9) // 10 DSIZE or above, 
+	{
+		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free4), bp); //change next field of old 'last-in' to new 'last-in'
+		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free4); //set prev field of new 'last-in' to old 'last-in'
+		free4 = bp; //set list pointer to new 'last-in'
+		return 4;
+	}
+	else if (size > 5) // 6 to 9 DSIZE or above, 
+	{
+		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free3), bp); //change next field of old 'last-in' to new 'last-in'
+		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free3); //set prev field of new 'last-in' to old 'last-in'
+		free3 = bp; //set list pointer to new 'last-in'
+		return 3;
+	}
+	else if (size > 3) // 4 to 5 DSIZE or above, 
+	{
+		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free2), bp); //change next field of old 'last-in' to new 'last-in'
+		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free2); //set prev field of new 'last-in' to old 'last-in'
+		free2 = bp; //set list pointer to new 'last-in'
+		return 2;
+	}
+	else if (size > 2) //  3 DSIZE, 
+	{
+		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free1), bp); //change next field of old 'last-in' to new 'last-in'
+		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free1); //set prev field of new 'last-in' to old 'last-in'
+		free1 = bp; //set list pointer to new 'last-in'
+		return 1;
+	}
+	else // 1 DSIZE, 
+	{
+		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free0), bp); //change next field of old 'last-in' to new 'last-in'
+		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free0); //set prev field of new 'last-in' to old 'last-in'
+		free0 = bp; //set list pointer to new 'last-in'
+		return 0;
+	}
+}
+
 /* checks for all cases when a block is freed and performs correct coalesce */
-static void *coalesce(void *bp) 
+static unsigned int coalesce(void *bp) 
 {
 	size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
 	size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
 	size_t size = GET_SIZE(HDRP(bp));
-
-	if (prev_alloc && next_alloc) {			/* Case 1: no coalesce required */
-		return bp;
+	if (prev_alloc && next_alloc) {			/* Case 1: no coalesce required, no changes to other free lists */
+		return LIFO_add(bp, size);
 	}
 
 	else if (prev_alloc && !next_alloc) {		/* Case 2: coalesce with next block */
@@ -353,7 +475,7 @@ int mm_check(void) {
     int number_of_free_blocks_in_seg_list = 0;
 
     /* Verify prologue */
-    ptr = starting_addr_of_heap;      /* pointer to the start of the heap link list */
+    ptr = firstbp;      /* pointer to the start of the heap link list */
     if ((GET_SIZE(ptr) != DSIZE) || (GET_ALLOC(ptr) != 1)) {
         printf("Addr: %p - Prologue header error** \n", ptr);
 		x=0;
