@@ -228,6 +228,7 @@ static void LIFO_remove(void* bp)
 		if(PREV_FREE_BLOCK(bp) != NULL) 								// if there is a PREV_FREE_BLOCK, 
 		{ 																// set its "next" field to next_free; 
 			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); // note that this can shift to NULL if this is the last entry;
+			return;
 		}
 		return;
 	}
@@ -244,6 +245,7 @@ static void LIFO_remove(void* bp)
 		if(PREV_FREE_BLOCK(bp) != NULL) 								// if there is a PREV_FREE_BLOCK, 
 		{ 																// set its "next" field to next_free; 
 			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); // note that this can shift to NULL if this is the last entry;
+			return;
 		}
 		return;
 	}
@@ -260,6 +262,7 @@ static void LIFO_remove(void* bp)
 		if(PREV_FREE_BLOCK(bp) != NULL) 								// if there is a PREV_FREE_BLOCK, 
 		{ 																// set its "next" field to next_free; 
 			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); // note that this can shift to NULL if this is the last entry;
+			return;
 		}
 		return;
 	}
@@ -276,6 +279,7 @@ static void LIFO_remove(void* bp)
 		if(PREV_FREE_BLOCK(bp) != NULL) 								// if there is a PREV_FREE_BLOCK, 
 		{ 																// set its "next" field to next_free; 
 			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); // note that this can shift to NULL if this is the last entry;
+			return;
 		}
 		return;
 	}
@@ -292,13 +296,14 @@ static void LIFO_remove(void* bp)
 		if(PREV_FREE_BLOCK(bp) != NULL) 								// if there is a PREV_FREE_BLOCK, 
 		{ 																// set its "next" field to next_free; 
 			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); // note that this can shift to NULL if this is the last entry;
+			return;
 		}
 		return;
 	}
 }
 
 /* checks for all cases when a block is freed and performs correct coalesce, returns the free list no. new free block was added to */
-static unsigned int coalesce(void *bp) 
+static void *coalesce(void *bp) 
 {
 	size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
 	size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
@@ -306,7 +311,8 @@ static unsigned int coalesce(void *bp)
 	/* Case 1: no coalesce required, no changes to other free lists */
 	if (prev_alloc && next_alloc) {							
 		mm_check();
-		return LIFO_add(bp, free_size);
+		LIFO_add(bp, free_size);
+		return bp;
 	}
 	/* Case 2: coalesce with next block, so remove next block from whatever list its on */
 	else if (prev_alloc && !next_alloc) {			
@@ -315,7 +321,8 @@ static unsigned int coalesce(void *bp)
 		PUT (HDRP(bp), PACK(free_size,0));
 		PUT (FTRP(bp), PACK(free_size,0));
 		mm_check();
-		return LIFO_add(bp, free_size);
+		LIFO_add(bp, free_size);
+		return bp;
 	}
 	/* Case 3: coalesce with prev block, so remove prev block from whatever list its on */
 	else if (!prev_alloc && next_alloc) {
@@ -325,7 +332,8 @@ static unsigned int coalesce(void *bp)
 		PUT(HDRP(PREV_BLKP(bp)), PACK(free_size, 0));
 		bp = PREV_BLKP(bp);
 		mm_check();
-		return LIFO_add(bp, free_size);
+		LIFO_add(bp, free_size);
+		return bp;
 	}
 	/* Case 4: coalesce with both prev and next block, so remove both blocks from whatever lists they were on */
 	else {								
@@ -337,7 +345,8 @@ static unsigned int coalesce(void *bp)
 		PUT(FTRP(NEXT_BLKP(bp)), PACK(free_size, 0));
 		bp = PREV_BLKP(bp);
 		mm_check();
-		return LIFO_add(bp, free_size);
+		LIFO_add(bp, free_size);
+		return bp;
 	}
 }
 
@@ -357,7 +366,7 @@ static void *extend_heap(size_t words)
 	PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));	/* new epilogue header */
 	lastbp = NEXT_BLKP(bp); // last block pointer to epilogue block 
 	/* coalesce if the previous block was free, also performs LIFO_add */
-	coalesce(bp);
+	bp = coalesce(bp); // coalesce moves the new block pointer backwards if it does coalesce, so that mm_malloc gets correct bp
 	return bp;
 }
 
@@ -415,7 +424,7 @@ static void place(void *bp, size_t asize)
 		bp = NEXT_BLKP(bp);
 		PUT(HDRP(bp), PACK(split_size, 0));
 		PUT(FTRP(bp), PACK(split_size, 0));
-		LIFO_add(bp, split_size);
+		LIFO_add(bp, split_size);		// adds new split block in
 	}
 	else {
 		PUT(HDRP(bp), PACK(csize, 1));
@@ -490,8 +499,8 @@ void *mm_malloc(size_t size)
 	}
 	
 	/* search the free list for a fit */
-	if ((bp = find_fit(asize)) != NULL) { // note that find_fit performs the lifo_remove
-		place(bp, asize);
+	if ((bp = find_fit(asize)) != NULL) { 	// note that find_fit performs the lifo_remove
+		place(bp, asize);					// and place lifo_adds if splitting occurs
 		return bp;
 	}
 
