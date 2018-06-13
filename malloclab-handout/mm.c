@@ -149,13 +149,13 @@ static void place(void *bp, size_t asize)
 /* used by mm_realloc in case new ptr within heap needed */
 static void copy_block(void *src, void *dest)
 {
-	size_t payload_size = GET_SIZE(HDRP(src)) - DSIZE;
-	long *curr_src = (long *)src; 
-	long *curr_dest = (long *)dest;
-	for(; curr_src < (src + payload_size); curr_src += DSIZE) /* traverse by DSIZE, copy long's worth of data */
+	size_t payload_size = GET_SIZE(HDRP(src)) - DSIZE; /* remove total size of header and footer */
+	char *curr_src = (char *)src; 
+	char *curr_dest = (char *)dest;
+	for(; curr_src < ((char *)src + payload_size); curr_src++) /* traverse byte by byte */
 	{
 		*curr_dest = *curr_src;
-		curr_dest += DSIZE;
+		curr_dest ++;
 	}
 } 
 
@@ -237,7 +237,7 @@ void mm_free(void *bp)
 }
 
 /*
- * mm_realloc - L: simple mm_realloc that mostly uses mm_alloc and mm_free
+ * mm_realloc - L: work in progress, doesn't preserve data for some reason
  */
 void *mm_realloc(void *ptr, size_t size)
 {
@@ -287,6 +287,8 @@ void *mm_realloc(void *ptr, size_t size)
 			else if ((new_ptr = find_fit(new_size)) != NULL) 
 			{
 				place(new_ptr, new_size);
+				copy_block(ptr, new_ptr);
+				mm_free(ptr);
 				return new_ptr;
 			}
 			else /* if no space, extend heap */
@@ -295,6 +297,8 @@ void *mm_realloc(void *ptr, size_t size)
 				if ((new_ptr = extend_heap(extendsize/WSIZE)) == NULL){return NULL;}
 				else {
 					place(new_ptr, new_size);
+					copy_block(ptr, new_ptr);
+					mm_free(ptr);
 					return new_ptr;
 				}
 			}
