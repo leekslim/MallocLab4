@@ -422,17 +422,18 @@ static void copy_block(void *src, void *dest)
 int mm_init(void)
 {
 	/* create the initial empty heap, mem_sbrk returns a generic pointer to the start of the heap, so heap_listp currently holds it */
-	firstbp = mem_sbrk(4*WSIZE);
-	if (firstbp == (void *)(-1)){ return -1;}/* check if mem is full and support routine produced error */
-	PUT(firstbp, 0); /* for alignment */
-	firstbp += WSIZE;
-	PUT(firstbp, PACK(DSIZE, 1)); /* prologue header */
-	firstbp += WSIZE;
-	PUT(firstbp, PACK(DSIZE, 1)); /* prologue footer */
-	firstbp += WSIZE;
-	PUT(firstbp, PACK(0, 1)); /* epilogue header */
+	void *heap_listp = mem_sbrk(4*WSIZE);
+	if (heap_listp == (void *)(-1)){ return -1;}/* check if mem is full and support routine produced error */
+	PUT(heap_listp, 0); /* for alignment */
+	heap_listp += WSIZE;
+	PUT(heap_listp, PACK(DSIZE, 1)); /* prologue header */
+	heap_listp += WSIZE;
+	PUT(heap_listp, PACK(DSIZE, 1)); /* prologue footer */
+	heap_listp += WSIZE;
+	PUT(heap_listp, PACK(0, 1)); /* epilogue header, will become header of first block after coalesce */
 	/* extend the empty heap with a free block of CHUNKSIZE bytes */
 	if (extend_heap(CHUNKSIZE/WSIZE) == NULL) {return -1;}
+	firstbp = heap_listp + WSIZE;
 	free0 = NULL;
 	free1 = NULL;
 	free2 = NULL;
@@ -683,7 +684,7 @@ int mm_check(void) {
 			x=0;
     	}
     	// Check coalescing: If alloc bit of current and next block is 0 
-        if (!(GET_ALLOC(HDRP(ptr)) && (!GET_ALLOC(HDRP(NEXT_BLKP(ptr)))))) {
+        if (!GET_ALLOC(HDRP(ptr)) && (!GET_ALLOC(HDRP(NEXT_BLKP(ptr))))) {
             printf("Addr: %p - ** Coalescing Error** \n", ptr);
 			x=0;
         }
