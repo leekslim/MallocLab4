@@ -348,8 +348,58 @@ void *mm_realloc(void *ptr, size_t size)
 
 int mm_check(void) {
 	int x=1; /*initialize non-zero value, should return 0 if error, and print error messages before that */
-	/* traverses headers and footers  to check size and alloc bits */
-	/* traverse to check for external fragmentation, i.e. missed coalesce */
-	/* checks for overlapping allocated blocks */
+	void *ptr;
+    int number_of_free_blocks = 0;
+    int number_of_free_blocks_in_seg_list = 0;
+
+    /* Verify prologue */
+    ptr = starting_addr_of_heap;      /* pointer to the start of the heap link list */
+    if ((GET_SIZE(ptr) != DSIZE) || (GET_ALLOC(ptr) != 1)) {
+        printf("Addr: %p - Prologue header error** \n", ptr);
+		x=0;
+    }
+    ptr += WSIZE;
+    if ((GET_SIZE(ptr) != DSIZE) || (GET_ALLOC(ptr) != 1)) {
+        printf("Addr: %p - Prologue footer error** \n", ptr);
+		x=0;
+    }
+    ptr += 2 * WSIZE; // set pointer to the next block
+
+    /* Iterating through entire heap. Convoluted code checks that
+     * we are not at the epilogue. Loops thr and checks epilogue block! */
+    while (GET_SIZE(HDRP(ptr)) > 0) {
+    	if (GET_SIZE(HDRP(ptr)) != GET_SIZE(FTRP(ptr))) {
+	        printf("Addr: %p - Header and footer size do not match\n", ptr);
+			x=0;
+	    }
+    	/* Check each block's address alignment */
+    	if (ALIGN((size_t) ptr) != (size_t)ptr) {
+    		printf("Addr: %p - Block Alignment Error** \n", ptr);
+			x=0;
+    	}
+    	/* Each block's bounds check */
+    	if ((ptr > top_of_heap) || (ptr < starting_addr_of_heap)) {
+    		printf("Addr: %p - Not within heap, top: %p, start: %p\n", ptr, top_of_heap, starting_addr_of_heap);
+			x=0;
+    	}
+	    /* Check if minimum block size met */
+        if (GET_SIZE(HDRP(ptr)) < (2*DSIZE)) {
+            printf("Addr: %p - ** Min Size Error ** \n", ptr);
+			x=0;
+        }
+	    if (GET_ALLOC(HDRP(ptr)) != GET_ALLOC(FTRP(ptr))) {
+    		printf("Addr: %p - ** Header and footer allocation flag do not match.\n", ptr);
+			x=0;
+    	}
+    	/* Check coalescing: If alloc bit of current and next block is 0 */
+        if (!(GET_ALLOC(HDRP(ptr)) && (!GET_ALLOC(HDRP(NEXT_BLKP(ptr)))))) {
+            printf("Addr: %p - ** Coalescing Error** \n", ptr);
+			x=0;
+        }
+        /* Count number of free blocks */
+        if (!(GET_ALLOC(HDRP(ptr))))
+		{number_of_free_blocks ++;}
+        ptr = NEXT_BLKP(ptr); // go to next pointer
+    }
 	return x;
 }
