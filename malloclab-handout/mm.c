@@ -115,7 +115,7 @@ static void *extend_heap(size_t words)
 	return coalesce(bp);
 }
 
-/* used by mm_alloc to find fit*/
+/* used by mm_malloc to find fit*/
 static void *find_fit(size_t asize)
 {
 	/* first-fit search */
@@ -128,7 +128,7 @@ static void *find_fit(size_t asize)
 	return NULL; /* No fit */
 }
 
-/* used by mm_alloc to do actual allocation by placing size and allocated bits, memory pointer in*/ 
+/* used by mm_malloc to do actual allocation by placing size and allocated bits, memory pointer in*/ 
 static void place(void *bp, size_t asize)
 {
 	size_t csize = GET_SIZE(HDRP(bp));
@@ -145,6 +145,12 @@ static void place(void *bp, size_t asize)
 		PUT(FTRP(bp), PACK(csize, 1));
 	}
 }
+
+/* used by mm_realloc in case new ptr within heap needed 
+static void copy_block(void *src, void *dest)
+{
+	
+} */
 
 
 /* 
@@ -225,11 +231,105 @@ void mm_free(void *bp)
 }
 
 /*
- * mm_realloc - textbook does not have this implmentation, so we will have to work on it outselves
+ * mm_realloc - L: simple mm_realloc that mostly uses mm_alloc and mm_free
  */
 void *mm_realloc(void *ptr, size_t size)
 {
-   return 0; 
+	/* check if not allocated */
+	if(ptr == NULL)
+	{
+		return mm_malloc(size);
+	}
+	/* check if just want to free */
+	else if(size == 0)
+	{
+		mm_free(ptr);
+		return NULL;
+	}
+	/* compare sizes */
+	else
+	{
+		void* new_ptr = ptr; /* for possible relocation */
+		size_t old_size = GET_SIZE(HDRP(ptr));
+		size_t old_next_size = GET_SIZE(HDRP(NEXT_BLKP(ptr)));
+		size_t new_size; /* following operations make new size include overhead */
+		/* adjust block size to include overhead and alignment reqs. */
+		if (size <= DSIZE) /* smaller than regular block size of payload */
+		{
+			new_size = 2*DSIZE;
+		}
+		/* if larger than regular block size, first DSIZE is for footer and header, second DSIZE-1 is for extra space if unaligned 
+		 * its -1 because size is at least 1 above DSIZE, division mods away unaligned 'remainder', then multiply back
+		*/
+		else 
+		{
+			new_size = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE);
+		}
+		
+		/* new size is greater, find space for new block size while preserving data */
+		if(new_size > old_size)
+		{
+			/* check if possible to coalesce with next block to make enough space */
+			merge_size = old_next_size + old_size; /* hypothetical combined block size */
+			if(!GET_ALLOC(HDRP(NEXT_BLKP(ptr))) && (merge_size >= new_size))
+			{
+				PUT(HDRP(ptr), PACK(merge_size, 0)); /* trick place into thinking it is one contiguous block */
+				place(ptr, new_size); /* place will split the next block if necessary */
+				return ptr;
+			}
+			/* since not possible, find another place to reallocate to, note that this leaves out possibility of merging backwards */
+			else if ((new_ptr = find_fit(new_size)) != NULL) 
+			{
+				place(new_ptr, new_size);
+				return new_ptr;
+			}
+			else
+			{
+				size_t extendsize = MAX(asize,CHUNKSIZE);
+				if ((new_ptr = extend_heap(extendsize/WSIZE)) == NULL){return NULL;}
+				else {
+					place(new_ptr, new_size);
+					return new_ptr;
+				}
+			}
+		}
+			
+		/* new size is smaller or equal */	
+		else 
+		{
+			size_t extra_space = old_size - new_size; /* because old_size and new_size are both DWORD-Aligned, extra-space is a multiple of DWORD */
+			size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
+			size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
+			if (extra_space < DWORD) {return ptr;} /* reduction in size too little to make any changes */
+			else if (prev_alloc && next_alloc && (extra_space < 2*DWORD)) {return ptr;} /* no free neighbours and extra space less than minimum block size */
+			else if (!next_alloc) /* give extra space to next block */
+			{
+				PUT(HDRP(ptr), PACK(new_size, 1));
+				PUT((ptr + new_size - DSIZE), PACK(new_size, 1));
+				PUT((ptr + new_size - WSIZE), PACK(old_next_size + extra_space, 0));
+				PUT((FTRP(NEXT_BLKP(ptr)), PACK(old_next_size + extra_space, 0));
+				return ptr;
+			}
+			else if (!prev_alloc) /* copy data into free previous block so that data is not lost before being copied, free block is now moved forward */
+			{
+				new_ptr = PREV_BLKP(ptr);
+				size_t old_prev_size = GET_SIZE(HDRP(new_ptr));
+				PUT(FTRP(ptr), PACK(old_prev_size + extra_space, 0)); /* before memory location of header is erased */
+				copy_block(ptr, new_ptr);
+				PUT(HDRP(new_ptr), PACK(new_size, 1));
+				PUT(FTRP(new_ptr), PACK(new_size, 1));
+				PUT(HDRP(NEXT_BLKP(new_ptr)), PACK(old_prev_size + extra_space, 0));
+				return new_ptr;
+			}
+			else { /* no free neighbours but extra space enough to split block in 2 */
+				PUT(HDRP(ptr), PACK(new_size, 1));
+				PUT(FTRP(ptr), PACK(new_size, 1));
+				PUT(HDRP(NEXT_BLKP(ptr)), PACK(extra_space, 0));
+				PUT(FTRP(NEXT_BLKP(ptr)), PACK(extra_space, 0));
+				return ptr;
+			}
+		}
+	}
 }
 
 /*
@@ -237,7 +337,9 @@ void *mm_realloc(void *ptr, size_t size)
 */
 
 int mm_check(void) {
-	int x=1; /*initialize non-zero value, should return 0 if error, and print error messages before that
-	all checking code should go here, printing error message if heap not consistent, and changing x to 0 */
+	int x=1; /*initialize non-zero value, should return 0 if error, and print error messages before that */
+	/* traverses headers and footers  to check size and alloc bits */
+	/* traverse to check for external fragmentation, i.e. missed coalesce */
+	/* checks for overlapping allocated blocks */
 	return x;
 }
