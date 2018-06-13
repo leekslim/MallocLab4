@@ -147,9 +147,9 @@ static void *free4 = NULL; /* pointer to free blocks with payload (9 to infinity
 
 /* PRIVATE STATIC FUNCTIONS */
 /* add to appropriate free list for simple case of freeing a new block at the end of the heap */
-static unsigned int LIFO_add(void* bp, size_t size) //argument passed INCLUDES overhead! returns the list no. it was added to
+static unsigned int LIFO_add(void* bp, size_t add_size) //argument passed INCLUDES overhead! returns the list no. it was added to
 { // can probably use a switch statement but it might bug out
-	if (size > (9 * DSIZE)) // 10 DSIZE or above, 
+	if (add_size > (9 * DSIZE)) // 10 DSIZE or above, 
 	{
 		if(free4 != NULL) // check if list empty
 		{
@@ -161,7 +161,7 @@ static unsigned int LIFO_add(void* bp, size_t size) //argument passed INCLUDES o
 		free4 = bp; //set list pointer to new 'last-in'
 		return 4;
 	}
-	else if (size > (5 * DSIZE)) // 6 to 9 DSIZE or above, 
+	else if (add_size > (5 * DSIZE)) // 6 to 9 DSIZE or above, 
 	{
 		if(free3 != NULL) // check if list empty
 		{
@@ -173,7 +173,7 @@ static unsigned int LIFO_add(void* bp, size_t size) //argument passed INCLUDES o
 		free3 = bp; //set list pointer to new 'last-in'
 		return 3;
 	}
-	else if (size > (3 * DSIZE)) // 4 to 5 DSIZE or above, 
+	else if (add_size > (3 * DSIZE)) // 4 to 5 DSIZE or above, 
 	{
 		if(free2 != NULL) // check if list empty
 		{
@@ -185,7 +185,7 @@ static unsigned int LIFO_add(void* bp, size_t size) //argument passed INCLUDES o
 		free2 = bp; //set list pointer to new 'last-in'
 		return 2;
 	}
-	else if (size > (2 * DSIZE)) //  3 DSIZE, 
+	else if (add_size > (2 * DSIZE)) //  3 DSIZE, 
 	{
 		if(free1 != NULL) // check if list empty
 		{
@@ -217,63 +217,83 @@ static void LIFO_remove(void* bp)
 	size_t size = GET_SIZE(HDRP(bp));
 	if(size > (9 * DSIZE))
 	{	
-		if(NEXT_FREE_BLOCK(bp) != NULL) // check if NOT last entry in list
-		{ 
-			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp); //prev field of next free block now has prev field of block about to be removed
+		if(NEXT_FREE_BLOCK(bp) == NULL) 								// if last entry on list,  
+		{ 																// shift list pointer to prev_free
+			free4 = PREV_FREE_BLOCK(bp); 								// note that if this is the only entry, it shifts to NULL
 		}
-		if(PREV_FREE_BLOCK(bp) != NULL) // check if NOT first entry in list
-		{
-			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); //next field of prev free block now has next field of block about to be removed
+		else 															// if not last entry,  note that this can shfit to NULL
+		{																// make next_free_block's "prev" field point to prev_free
+			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp);
 		}
-		free4 = PREV_FREE_BLOCK(bp);
+		if(PREV_FREE_BLOCK(bp) != NULL) 								// if there is a PREV_FREE_BLOCK, 
+		{ 																// set its "next" field to next_free; 
+			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); // note that this can shift to NULL if this is the last entry;
+		}
+		return;
 	}
 	else if(size > (5 * DSIZE))
 	{	
-		if(NEXT_FREE_BLOCK(bp) != NULL) // check if NOT last entry in list
-		{ 
-			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp); //prev field of next free block now has prev field of block about to be removed
+		if(NEXT_FREE_BLOCK(bp) == NULL) 								// if last entry on list,  
+		{ 																// shift list pointer to prev_free
+			free3 = PREV_FREE_BLOCK(bp); 								// note that if this is the only entry, it shifts to NULL
 		}
-		if(PREV_FREE_BLOCK(bp) != NULL) // check if NOT first entry in list
-		{
-			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); //next field of prev free block now has next field of block about to be removed
+		else 															// if not last entry,  note that this can shfit to NULL
+		{																// make next_free_block's "prev" field point to prev_free
+			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp);
 		}
-		free3 = PREV_FREE_BLOCK(bp);
+		if(PREV_FREE_BLOCK(bp) != NULL) 								// if there is a PREV_FREE_BLOCK, 
+		{ 																// set its "next" field to next_free; 
+			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); // note that this can shift to NULL if this is the last entry;
+		}
+		return;
 	}
 	else if(size > (3 * DSIZE))
 	{	
-		if(NEXT_FREE_BLOCK(bp) != NULL) // check if NOT last entry in list
-		{ 
-			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp); //prev field of next free block now has prev field of block about to be removed
+		if(NEXT_FREE_BLOCK(bp) == NULL) 								// if last entry on list,  
+		{ 																// shift list pointer to prev_free
+			free2 = PREV_FREE_BLOCK(bp); 								// note that if this is the only entry, it shifts to NULL
 		}
-		if(PREV_FREE_BLOCK(bp) != NULL) // check if NOT first entry in list
-		{
-			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); //next field of prev free block now has next field of block about to be removed
+		else 															// if not last entry,  note that this can shfit to NULL
+		{																// make next_free_block's "prev" field point to prev_free
+			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp);
 		}
-		free2 = PREV_FREE_BLOCK(bp);
+		if(PREV_FREE_BLOCK(bp) != NULL) 								// if there is a PREV_FREE_BLOCK, 
+		{ 																// set its "next" field to next_free; 
+			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); // note that this can shift to NULL if this is the last entry;
+		}
+		return;
 	}
 	else if(size > (2 * DSIZE))
 	{	
-		if(NEXT_FREE_BLOCK(bp) != NULL) // check if NOT last entry in list
-		{ 
-			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp); //prev field of next free block now has prev field of block about to be removed
+		if(NEXT_FREE_BLOCK(bp) == NULL) 								// if last entry on list,  
+		{ 																// shift list pointer to prev_free
+			free1 = PREV_FREE_BLOCK(bp); 								// note that if this is the only entry, it shifts to NULL
 		}
-		if(PREV_FREE_BLOCK(bp) != NULL) // check if NOT first entry in list
-		{
-			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); //next field of prev free block now has next field of block about to be removed
+		else 															// if not last entry,  note that this can shfit to NULL
+		{																// make next_free_block's "prev" field point to prev_free
+			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp);
 		}
-		free1 = PREV_FREE_BLOCK(bp);
+		if(PREV_FREE_BLOCK(bp) != NULL) 								// if there is a PREV_FREE_BLOCK, 
+		{ 																// set its "next" field to next_free; 
+			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); // note that this can shift to NULL if this is the last entry;
+		}
+		return;
 	}
 	else
 	{	
-		if(NEXT_FREE_BLOCK(bp) != NULL) // check if NOT last entry in list
-		{ 
-			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp); //prev field of next free block now has prev field of block about to be removed
+		if(NEXT_FREE_BLOCK(bp) == NULL) 								// if last entry on list,  
+		{ 																// shift list pointer to prev_free
+			free0 = PREV_FREE_BLOCK(bp); 								// note that if this is the only entry, it shifts to NULL
 		}
-		if(PREV_FREE_BLOCK(bp) != NULL) // check if NOT first entry in list
-		{
-			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); //next field of prev free block now has next field of block about to be removed
+		else 															// if not last entry,  note that this can shfit to NULL
+		{																// make next_free_block's "prev" field point to prev_free
+			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp);
 		}
-		free0 = PREV_FREE_BLOCK(bp);
+		if(PREV_FREE_BLOCK(bp) != NULL) 								// if there is a PREV_FREE_BLOCK, 
+		{ 																// set its "next" field to next_free; 
+			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); // note that this can shift to NULL if this is the last entry;
+		}
+		return;
 	}
 }
 
@@ -282,84 +302,87 @@ static unsigned int coalesce(void *bp)
 {
 	size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
 	size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
-	size_t size = GET_SIZE(HDRP(bp));
+	size_t free_size = GET_SIZE(HDRP(bp));
 	if (prev_alloc && next_alloc) {			/* Case 1: no coalesce required, no changes to other free lists */	
-		return LIFO_add(bp, size);
+		mm_check();
+		return LIFO_add(bp, free_size);
 	}
 
 	else if (prev_alloc && !next_alloc) {		/* Case 2: coalesce with next block, so remove next block from whatever list its on */
 		LIFO_remove(NEXT_BLKP(bp));
-		size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
-		PUT (HDRP(bp), PACK(size,0));
-		PUT (FTRP(bp), PACK(size,0));
-		return LIFO_add(bp, size);
+		free_size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
+		PUT (HDRP(bp), PACK(free_size,0));
+		PUT (FTRP(bp), PACK(free_size,0));
+		mm_check();
+		return LIFO_add(bp, free_size);
 	}
 
 	else if (!prev_alloc && next_alloc) {		/* Case 3: coalesce with prev block, so remove prev block from whatever list its on */
 		LIFO_remove(PREV_BLKP(bp));
-		size += GET_SIZE(HDRP(PREV_BLKP(bp)));
-		PUT(FTRP(bp), PACK(size, 0));
-		PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
+		free_size += GET_SIZE(HDRP(PREV_BLKP(bp)));
+		PUT(FTRP(bp), PACK(free_size, 0));
+		PUT(HDRP(PREV_BLKP(bp)), PACK(free_size, 0));
 		bp = PREV_BLKP(bp);
-		return LIFO_add(bp, size);
+		mm_check();
+		return LIFO_add(bp, free_size);
 	}
 
 	else {						/* Case 4: coalesce with both prev and next block, so remove both blocks from whatever lists they were on */
 		LIFO_remove(PREV_BLKP(bp));
 		LIFO_remove(NEXT_BLKP(bp));
-		size += GET_SIZE(HDRP(PREV_BLKP(bp))) +
+		free_size += GET_SIZE(HDRP(PREV_BLKP(bp))) +
 				GET_SIZE(FTRP(NEXT_BLKP(bp)));
-		PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
-		PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
+		PUT(HDRP(PREV_BLKP(bp)), PACK(free_size, 0));
+		PUT(FTRP(NEXT_BLKP(bp)), PACK(free_size, 0));
 		bp = PREV_BLKP(bp);
-		return LIFO_add(bp, size);
+		mm_check();
+		return LIFO_add(bp, free_size);
 	}
-	mm_check();
 }
 
 /* extends the heap, checks if enough memory available, and whether size requested is aligned */
 static void *extend_heap(size_t words)
 {
 	char *bp;
-	size_t size;
+	size_t heap_extend_size;
 	
 	/* allocate an even number of words to maintain alignment */
-	size = (words % 2) ? (words+1) * WSIZE : words * WSIZE;
-	if ((long)(bp = mem_sbrk(size)) == (-1)){return NULL;} // check if support routine actually allocated space
+	heap_extend_size = (words % 2) ? (words+1) * WSIZE : words * WSIZE;
+	if ((long)(bp = mem_sbrk(heap_extend_size)) == (-1)){return NULL;} // check if support routine actually allocated space
 	
 	/* initialize free block header/footer and the epilogue header */
-	PUT(HDRP(bp), PACK(size, 0));		/* free block header converts previous epilogue block as its new header */ 
-	PUT(FTRP(bp), PACK(size, 0));		/* free block footer */
+	PUT(HDRP(bp), PACK(heap_extend_size, 0));		/* free block header converts previous epilogue block as its new header */ 
+	PUT(FTRP(bp), PACK(heap_extend_size, 0));		/* free block footer */
 	PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));	/* new epilogue header */
-	lastbp = NEXT_BLKP(bp);
+	lastbp = NEXT_BLKP(bp); // last block pointer to epilogue block 
 	/* coalesce if the previous block was free, also performs LIFO_add */
 	coalesce(bp);
 	return bp;
 }
 
 /* used by mm_malloc to find the best fitting block using LIFO policy on the segregated free lists, this function REMOVES the found fit from its list */
-static void *find_fit(size_t size) // size argument being passed includes overhead
+static void *find_fit(size_t fit_size) // size argument being passed includes overhead
 { // go from smallest to largest seg list to ensure best fit
 	void *best_fit = NULL;
-	if((size <= (2*DSIZE)) && free0) // DSIZE payload and free0 is not NULL
+	if((fit_size <= (2*DSIZE)) && free0) // DSIZE payload and free0 is not NULL
 	{
 		best_fit = free0;
 		LIFO_remove(free0);
 		return best_fit;
 	}
-	else if((size <= (3*DSIZE)) && free1) // 2*DSIZE payload and free1 is not NULL
+	else if((fit_size <= (3*DSIZE)) && free1) // 2*DSIZE payload and free1 is not NULL
 	{
 		best_fit = free1;
 		LIFO_remove(free1);
 		return best_fit;
 	}
-	else if((size <= (5*DSIZE)) && free2) // (3 to 4)*DSIZE payload and free2 is not NULL
+	else if((fit_size <= (5*DSIZE)) && free2) // (3 to 4)*DSIZE payload and free2 is not NULL
 	{
 		best_fit = free2;
 		LIFO_remove(free2);
 		return best_fit;
 	}
-	else if((size <= (9*DSIZE)) && free3) // (5 to 8)*DSIZE payload and free3 is not NULL
+	else if((fit_size <= (9*DSIZE)) && free3) // (5 to 8)*DSIZE payload and free3 is not NULL
 	{
 		best_fit = free3;
 		LIFO_remove(free3);
@@ -368,7 +391,7 @@ static void *find_fit(size_t size) // size argument being passed includes overhe
 	else if(free4 != NULL)// (9 or more)*DSIZE payload and free4 is not NULL
 	{
 		for(best_fit = free4; best_fit != NULL; best_fit = NEXT_FREE_BLOCK(best_fit)) // traverse list finding suitably sized chunk
-		{	if(GET_SIZE(HDRP(best_fit)) >= size)
+		{	if(GET_SIZE(HDRP(best_fit)) >= fit_size)
 			{
 				best_fit = free4;
 				LIFO_remove(free4);
@@ -423,6 +446,7 @@ int mm_init(void)
 {
 	/* create the initial empty heap, mem_sbrk returns a generic pointer to the start of the heap, so heap_listp currently holds it */
 	void *heap_listp = mem_sbrk(4*WSIZE);
+	firstbp = heap_listp + 2*DSIZE;
 	if (heap_listp == (void *)(-1)){ return -1;}/* check if mem is full and support routine produced error */
 	PUT(heap_listp, 0); /* for alignment */
 	heap_listp += WSIZE;
@@ -433,12 +457,6 @@ int mm_init(void)
 	PUT(heap_listp, PACK(0, 1)); /* epilogue header, will become header of first block after coalesce */
 	/* extend the empty heap with a free block of CHUNKSIZE bytes */
 	if (extend_heap(CHUNKSIZE/WSIZE) == NULL) {return -1;}
-	firstbp = heap_listp + WSIZE;
-	free0 = NULL;
-	free1 = NULL;
-	free2 = NULL;
-	free3 = NULL;
-	free4 = firstbp; /* add new empty heap to free4 list */
 	mm_check();
     return 0;
 }
