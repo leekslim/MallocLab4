@@ -104,7 +104,7 @@ team_t team = {
 /*  based on minimum block size 8 */
 #define WSIZE 4 // size of the header and footer
 #define DSIZE 8 // regular or default block size
-#define CHUNKSIZE 512 // when extending heap
+#define CHUNKSIZE 1<<12 // when extending heap
 #define MAX(x, y) ((x) > (y)? (x) : (y))
 
 /* pack size bit and allocated bit into same word */
@@ -153,6 +153,7 @@ static unsigned int LIFO_add(char* bp, size_t size) //argument passed INCLUDES o
 		if(free4 != NULL) // check if list empty
 		{PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free4), bp);} //change next field of old 'last-in' to new 'last-in'
 		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free4); //set prev field of new 'last-in' to old 'last-in'
+		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); //set next field of new 'last-in' to Null
 		free4 = bp; //set list pointer to new 'last-in'
 		return 4;
 	}
@@ -161,6 +162,7 @@ static unsigned int LIFO_add(char* bp, size_t size) //argument passed INCLUDES o
 		if(free3 != NULL) // check if list empty
 		{PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free3), bp);} //change next field of old 'last-in' to new 'last-in'
 		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free3); //set prev field of new 'last-in' to old 'last-in'
+		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); //set next field of new 'last-in' to Null
 		free3 = bp; //set list pointer to new 'last-in'
 		return 3;
 	}
@@ -169,6 +171,7 @@ static unsigned int LIFO_add(char* bp, size_t size) //argument passed INCLUDES o
 		if(free2 != NULL) // check if list empty
 		{PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free2), bp);} //change next field of old 'last-in' to new 'last-in'
 		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free2); //set prev field of new 'last-in' to old 'last-in'
+		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); //set next field of new 'last-in' to Null
 		free2 = bp; //set list pointer to new 'last-in'
 		return 2;
 	}
@@ -177,6 +180,7 @@ static unsigned int LIFO_add(char* bp, size_t size) //argument passed INCLUDES o
 		if(free1 != NULL) // check if list empty
 		{PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free1), bp);} //change next field of old 'last-in' to new 'last-in'
 		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free1); //set prev field of new 'last-in' to old 'last-in'
+		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); //set next field of new 'last-in' to Null
 		free1 = bp; //set list pointer to new 'last-in'
 		return 1;
 	}
@@ -185,6 +189,7 @@ static unsigned int LIFO_add(char* bp, size_t size) //argument passed INCLUDES o
 		if(free0 != NULL) // check if list empty
 		{PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free0), bp);} //change next field of old 'last-in' to new 'last-in'
 		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free0); //set prev field of new 'last-in' to old 'last-in'
+		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); //set next field of new 'last-in' to Null
 		free0 = bp; //set list pointer to new 'last-in'
 		return 0;
 	}
@@ -310,8 +315,9 @@ static void *extend_heap(size_t words)
 	PUT(FTRP(bp), PACK(size, 0));		/* free block footer */
 	PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));	/* new epilogue header */
 	
-	/* coalesce if the previous block was free */
-	return coalesce(bp);
+	/* coalesce if the previous block was free, also performs LIFO_add */
+	coalesce(bp);
+	return bp;
 }
 
 /* used by mm_malloc to find the best fitting block using LIFO policy on the segregated free lists, this function REMOVES the found fit from its list */
@@ -342,13 +348,19 @@ static void *find_fit(size_t size) // size argument being passed includes overhe
 		LIFO_remove(free3);
 		return best_fit;
 	}
-	else if((size <= (3*DSIZE)) && free4) // (9 or more)*DSIZE payload and free4 is not NULL
+	else if(free4 != NULL)// (9 or more)*DSIZE payload and free4 is not NULL
 	{
-		best_fit = free4;
-		LIFO_remove(free4);
-		return best_fit;
+		for(best_fit = free4; best_fit != NULL; best_fit = NEXT_FREE_BLOCK(best_fit)) // traverse list finding suitably sized chunk
+		{	if(GET_SIZE(HDRP(best_fit)) >= size)
+			{
+				best_fit = free4;
+				LIFO_remove(free4);
+				return best_fit;
+			}
+		}
+		return NULL; /* no fit */
 	}
-	else {return NULL;} /* no fit */
+	else return NULL; 
 }	
 
 /* used by mm_malloc to do actual allocation by placing size and allocated bits, memory pointer in; performs splitting if necessary*/ 
@@ -405,6 +417,10 @@ int mm_init(void)
 	/* extend the empty heap with a free block of CHUNKSIZE bytes */
 	if (extend_heap(CHUNKSIZE/WSIZE) == NULL) {return -1;}
 	firstbp = heap_listp - WSIZE; /* changes global variable pointing to first block after prologue*/
+	free0 = NULL;
+	free1 = NULL;
+	free2 = NULL;
+	free3 = NULL;
 	free4 = firstbp; /* add new empty heap to free4 list */
     return 0;
 }
