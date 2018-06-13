@@ -150,35 +150,40 @@ static unsigned int LIFO_add(char* bp, size_t size) //argument passed INCLUDES o
 { // can probably use a switch statement but it might bug out
 	if (size > (9 * DSIZE)) // 10 DSIZE or above, 
 	{
-		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free4), bp); //change next field of old 'last-in' to new 'last-in'
+		if(free4 != NULL) // check if list empty
+		{PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free4), bp);} //change next field of old 'last-in' to new 'last-in'
 		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free4); //set prev field of new 'last-in' to old 'last-in'
 		free4 = bp; //set list pointer to new 'last-in'
 		return 4;
 	}
 	else if (size > (5 * DSIZE)) // 6 to 9 DSIZE or above, 
 	{
-		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free3), bp); //change next field of old 'last-in' to new 'last-in'
+		if(free3 != NULL) // check if list empty
+		{PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free3), bp);} //change next field of old 'last-in' to new 'last-in'
 		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free3); //set prev field of new 'last-in' to old 'last-in'
 		free3 = bp; //set list pointer to new 'last-in'
 		return 3;
 	}
 	else if (size > (3 * DSIZE)) // 4 to 5 DSIZE or above, 
 	{
-		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free2), bp); //change next field of old 'last-in' to new 'last-in'
+		if(free2 != NULL) // check if list empty
+		{PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free2), bp);} //change next field of old 'last-in' to new 'last-in'
 		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free2); //set prev field of new 'last-in' to old 'last-in'
 		free2 = bp; //set list pointer to new 'last-in'
 		return 2;
 	}
 	else if (size > (2 * DSIZE)) //  3 DSIZE, 
 	{
-		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free1), bp); //change next field of old 'last-in' to new 'last-in'
+		if(free1 != NULL) // check if list empty
+		{PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free1), bp);} //change next field of old 'last-in' to new 'last-in'
 		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free1); //set prev field of new 'last-in' to old 'last-in'
 		free1 = bp; //set list pointer to new 'last-in'
 		return 1;
 	}
 	else // 1 DSIZE, 
 	{
-		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free0), bp); //change next field of old 'last-in' to new 'last-in'
+		if(free0 != NULL) // check if list empty
+		{PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free0), bp);} //change next field of old 'last-in' to new 'last-in'
 		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free0); //set prev field of new 'last-in' to old 'last-in'
 		free0 = bp; //set list pointer to new 'last-in'
 		return 0;
@@ -357,7 +362,7 @@ static void place(void *bp, size_t asize)
 		bp = NEXT_BLKP(bp);
 		PUT(HDRP(bp), PACK(split_size, 0));
 		PUT(FTRP(bp), PACK(split_size, 0));
-		unsigned int tmp = LIFO_add(bp, split_size);
+		LIFO_add(bp, split_size);
 	}
 	else {
 		PUT(HDRP(bp), PACK(csize, 1));
@@ -596,15 +601,15 @@ void *mm_realloc(void *ptr, size_t size)
 /*
 * L: Heap Checker as per instructions, should be called at various points to check heap
 */
-
+/*
 int mm_check(void) {
-	int x=1; /*initialize non-zero value, should return 0 if error, and print error messages before that */
+	int x=1; // initialize non-zero value, should return 0 if error, and print error messages before that 
 	void *ptr;
     int number_of_free_blocks = 0;
     int number_of_free_blocks_in_seg_list = 0;
 
-    /* Verify prologue */
-    ptr = firstbp;      /* pointer to the start of the heap link list */
+    // Verify prologue 
+    ptr = firstbp;      // pointer to the start of the heap link list 
     if ((GET_SIZE(ptr) != DSIZE) || (GET_ALLOC(ptr) != 1)) {
         printf("Addr: %p - Prologue header error** \n", ptr);
 		x=0;
@@ -616,24 +621,24 @@ int mm_check(void) {
     }
     ptr += 2 * WSIZE; // set pointer to the next block
 
-    /* Iterating through entire heap. Convoluted code checks that
-     * we are not at the epilogue. Loops thr and checks epilogue block! */
+    // Iterating through entire heap. Convoluted code checks that
+    // we are not at the epilogue. Loops thr and checks epilogue block! 
     while (GET_SIZE(HDRP(ptr)) > 0) {
     	if (GET_SIZE(HDRP(ptr)) != GET_SIZE(FTRP(ptr))) {
 	        printf("Addr: %p - Header and footer size do not match\n", ptr);
 			x=0;
 	    }
-    	/* Check each block's address alignment */
+    	// Check each block's address alignment 
     	if (ALIGN((size_t) ptr) != (size_t)ptr) {
     		printf("Addr: %p - Block Alignment Error** \n", ptr);
 			x=0;
     	}
-    	/* Each block's bounds check */
+    	// Each block's bounds check 
     	if ((ptr > top_of_heap) || (ptr < starting_addr_of_heap)) {
     		printf("Addr: %p - Not within heap, top: %p, start: %p\n", ptr, top_of_heap, starting_addr_of_heap);
 			x=0;
     	}
-	    /* Check if minimum block size met */
+	    // Check if minimum block size met 
         if (GET_SIZE(HDRP(ptr)) < (2*DSIZE)) {
             printf("Addr: %p - ** Min Size Error ** \n", ptr);
 			x=0;
@@ -642,15 +647,15 @@ int mm_check(void) {
     		printf("Addr: %p - ** Header and footer allocation flag do not match.\n", ptr);
 			x=0;
     	}
-    	/* Check coalescing: If alloc bit of current and next block is 0 */
+    	// Check coalescing: If alloc bit of current and next block is 0 
         if (!(GET_ALLOC(HDRP(ptr)) && (!GET_ALLOC(HDRP(NEXT_BLKP(ptr)))))) {
             printf("Addr: %p - ** Coalescing Error** \n", ptr);
 			x=0;
         }
-        /* Count number of free blocks */
+        // Count number of free blocks 
         if (!(GET_ALLOC(HDRP(ptr))))
 		{number_of_free_blocks ++;}
         ptr = NEXT_BLKP(ptr); // go to next pointer
     }
 	return x;
-}
+}*/
