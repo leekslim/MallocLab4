@@ -346,17 +346,18 @@ static void *find_fit(size_t size) // size argument being passed includes overhe
 	else {return NULL;} /* no fit */
 }	
 
-/* used by mm_malloc to do actual allocation by placing size and allocated bits, memory pointer in*/ 
+/* used by mm_malloc to do actual allocation by placing size and allocated bits, memory pointer in; performs splitting if necessary*/ 
 static void place(void *bp, size_t asize)
 {
 	size_t csize = GET_SIZE(HDRP(bp));
-
-	if ((csize - asize) >= (2*DSIZE)) {
+	size_t split_size = csize - asize; //hypothetical split size, since asize and csize are 8 byte aligned, so will split size
+	if ((split_size) >= (2*DSIZE)) {
 		PUT(HDRP(bp), PACK(asize, 1));
 		PUT(FTRP(bp), PACK(asize, 1));
 		bp = NEXT_BLKP(bp);
-		PUT(HDRP(bp), PACK(csize-asize, 0));
-		PUT(FTRP(bp), PACK(csize-asize, 0));
+		PUT(HDRP(bp), PACK(split_size, 0));
+		PUT(FTRP(bp), PACK(split_size, 0));
+		unsigned int tmp = LIFO_add(bp, split_size);
 	}
 	else {
 		PUT(HDRP(bp), PACK(csize, 1));
@@ -431,32 +432,33 @@ void *mm_malloc(size_t size)
 	}
 	
 	/* search the free list for a fit */
-	if ((bp = find_fit(asize)) != NULL) {
+	if ((bp = find_fit(asize)) != NULL) { // note that find_fit performs the lifo_remove
 		place(bp, asize);
 		return bp;
 	}
 
 	/* no fit found. get more memory and place the block */
 	extendsize = MAX(asize,CHUNKSIZE);
-	if ((bp = extend_heap(extendsize/WSIZE)) == NULL)
+	if ((bp = extend_heap(extendsize/WSIZE)) == NULL) //extend_heap calls coalesce at the end, which performs necessary LIFO adds and removes
 		return NULL;
 	place(bp, asize);
 	return bp;
 }
 
 /*
- * mm_free - frees, and then coalesces, L: I don't think it checks whether that block is free or not but I guess it's not necessary
+ * mm_free - frees, and then coalesces, which performs all the necessary LIFO policies
  */
 void mm_free(void *bp)
 {
 	size_t size = GET_SIZE(HDRP(bp));
 	PUT(HDRP(bp), PACK(size, 0));
 	PUT(FTRP(bp), PACK(size, 0));
-	coalesce(bp);
+	unsigned int tmp = coalesce(bp);
 }
 
 /*
- * mm_realloc - L: work in progress, doesn't preserve data for some reason
+ * mm_realloc - accepts pointer to allocated region, returns pointer to an allocated region with size bytes; if size is 0, frees the block
+ * if pointer points to unallocated region, just allocates with the given size
  */
 void *mm_realloc(void *ptr, size_t size)
 {
@@ -477,6 +479,9 @@ void *mm_realloc(void *ptr, size_t size)
 		void* new_ptr = ptr; /* for possible relocation */
 		size_t old_size = GET_SIZE(HDRP(ptr));
 		size_t old_next_size = GET_SIZE(HDRP(NEXT_BLKP(ptr)));
+		size_t old_prev_size = GET_SIZE(HDRP(PREV_BLKP(ptr)));
+		size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(ptr)));
+		size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(ptr)));
 		size_t new_size; /* following operations make new size include overhead */
 		/* adjust block size to include overhead and alignment reqs. */
 		if (size <= DSIZE) /* smaller than regular block size of payload */
@@ -494,13 +499,35 @@ void *mm_realloc(void *ptr, size_t size)
 		/* new size is greater, find space for new block size while preserving data */
 		if(new_size > old_size)
 		{
-			/* check if possible to coalesce with next block to make enough space */
-			size_t merge_size = old_next_size + old_size; /* hypothetical combined block size */
-			if(!GET_ALLOC(HDRP(NEXT_BLKP(ptr))) && (merge_size >= new_size))
+			size_t merge_size = old_prev_size + old_size; /* hypothetical combined block size */
+			/* check if possible to coalesce with prev block to make enough space */
+			if(!prev_alloc && (merge_size >= new_size))
 			{
+				new_ptr = PREV_BLKP(ptr);
+				copy_block(ptr, new_ptr);
+				place(new_ptr, new_size); // place performs LIFO add if splitting occurs but not remove
+				LIFO_remove(new_ptr);
+				return new_ptr;
+			}
+			
+			/* check if possible to coalesce with next block to make enough space */
+			else if(!next_alloc && ((merge_size = old_next_size + old_size) >= new_size))
+			{
+				LIFO_remove(NEXT_BLKP(ptr));
 				PUT(HDRP(ptr), PACK(merge_size, 0)); /* trick place into thinking it is one contiguous block */
-				place(ptr, new_size); /* place will split the next block if necessary */
+				place(ptr, new_size); // place will split the next block if necessary
 				return ptr;
+			}
+			
+			/* check if possible to coalesce with next AND prev block to make enough space */
+			if(!prev_alloc && !next_alloc && ((merge_size += old_prev_size) >= new_size))
+			{
+				LIFO_remove(NEXT_BLKP(ptr));
+				new_ptr = PREV_BLKP(ptr);
+				copy_block(ptr, new_ptr);
+				place(new_ptr, new_size); // place performs LIFO add if splitting occurs but not remove
+				LIFO_remove(new_ptr);
+				return new_ptr;
 			}
 			/* since not possible, find another place to reallocate to, note that this leaves out possibility of merging backwards */
 			else if ((new_ptr = find_fit(new_size)) != NULL) 
@@ -526,35 +553,40 @@ void *mm_realloc(void *ptr, size_t size)
 		/* new size is smaller or equal */	
 		else 
 		{
-			size_t extra_space = old_size - new_size; /* because old_size and new_size are both DWORD-Aligned, extra-space is a multiple of DWORD */
-			size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(ptr)));
-			size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(ptr)));
+			size_t extra_space = old_size - new_size; /* because old_size and new_size are both DWORD-Aligned, extra_space is a multiple of DWORD */
 			if (extra_space < DSIZE) {return ptr;} /* reduction in size too little to make any changes */
 			else if (prev_alloc && next_alloc && (extra_space < 2*DSIZE)) {return ptr;} /* no free neighbours and extra space less than minimum block size */
 			else if (!next_alloc) /* give extra space to next block */
 			{
+				size_t new_next_size = old_next_size + extra_space; //common sub-expression elimination for later
+				LIFO_remove(NEXT_BLKP(ptr));
 				PUT(HDRP(ptr), PACK(new_size, 1));
-				PUT((ptr + new_size - DSIZE), PACK(new_size, 1));
-				PUT((ptr + new_size - WSIZE), PACK(old_next_size + extra_space, 0));
-				PUT(FTRP(NEXT_BLKP(ptr)), PACK(old_next_size + extra_space, 0));
+				PUT(FTRP(ptr), PACK(new_size, 1));
+				PUT((ptr + new_size - WSIZE), PACK(new_next_size, 0));
+				PUT(FTRP(NEXT_BLKP(ptr)), PACK(new_next_size, 0));
+				unsigned int tmp = LIFO_add(NEXT_BLKP(ptr), new_next_size);
 				return ptr;
 			}
 			else if (!prev_alloc) /* copy data into free previous block so that data is not lost before being copied, free block is now moved forward */
 			{
-				new_ptr = PREV_BLKP(ptr);
 				size_t old_prev_size = GET_SIZE(HDRP(new_ptr));
-				PUT(FTRP(ptr), PACK(old_prev_size + extra_space, 0)); /* before memory location of header is erased */
+				size_t new_next_size = old_prev_size + extra_space; //common sub-expression elimination for later
+				new_ptr = PREV_BLKP(ptr);
+				LIFO_remove(new_ptr); // no longer on the free list
+				PUT(FTRP(ptr), PACK(new_next_size, 0)); /* before memory location of header is erased */
 				copy_block(ptr, new_ptr);
 				PUT(HDRP(new_ptr), PACK(new_size, 1));
 				PUT(FTRP(new_ptr), PACK(new_size, 1));
-				PUT(HDRP(NEXT_BLKP(new_ptr)), PACK(old_prev_size + extra_space, 0));
+				PUT(HDRP(NEXT_BLKP(new_ptr)), PACK(new_next_size, 0));
+				unsigned int tmp = LIFO_add(NEXT_BLKP(new_ptr), new_next_size);
 				return new_ptr;
 			}
-			else { /* no free neighbours but extra space enough to split block in 2 */
+			else { /* no free neighbours but extra space enough to split block in 2, basically the first half of place function */
 				PUT(HDRP(ptr), PACK(new_size, 1));
 				PUT(FTRP(ptr), PACK(new_size, 1));
 				PUT(HDRP(NEXT_BLKP(ptr)), PACK(extra_space, 0));
 				PUT(FTRP(NEXT_BLKP(ptr)), PACK(extra_space, 0));
+				unsigned int tmp = LIFO_add(NEXT_BLKP(ptr), extra_space);
 				return ptr;
 			}
 		}
