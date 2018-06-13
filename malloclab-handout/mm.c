@@ -146,12 +146,18 @@ static void place(void *bp, size_t asize)
 	}
 }
 
-/* used by mm_realloc in case new ptr within heap needed 
+/* used by mm_realloc in case new ptr within heap needed */
 static void copy_block(void *src, void *dest)
 {
-	
-} */
-
+	size_t payload_size = GET_SIZE(HDRP(src)) - DSIZE;
+	long *curr_src = (long *)src; 
+	long *curr_dest = (long *)dest;
+	for(; curr_src < (src + payload_size); curr_src += DSIZE) /* traverse by DSIZE, copy long's worth of data */
+	{
+		*curr_dest = *curr_src;
+		curr_dest += DSIZE;
+	}
+} 
 
 /* 
  *
@@ -270,7 +276,7 @@ void *mm_realloc(void *ptr, size_t size)
 		if(new_size > old_size)
 		{
 			/* check if possible to coalesce with next block to make enough space */
-			merge_size = old_next_size + old_size; /* hypothetical combined block size */
+			size_t merge_size = old_next_size + old_size; /* hypothetical combined block size */
 			if(!GET_ALLOC(HDRP(NEXT_BLKP(ptr))) && (merge_size >= new_size))
 			{
 				PUT(HDRP(ptr), PACK(merge_size, 0)); /* trick place into thinking it is one contiguous block */
@@ -283,9 +289,9 @@ void *mm_realloc(void *ptr, size_t size)
 				place(new_ptr, new_size);
 				return new_ptr;
 			}
-			else
+			else /* if no space, extend heap */
 			{
-				size_t extendsize = MAX(asize,CHUNKSIZE);
+				size_t extendsize = MAX(new_size,CHUNKSIZE);
 				if ((new_ptr = extend_heap(extendsize/WSIZE)) == NULL){return NULL;}
 				else {
 					place(new_ptr, new_size);
@@ -298,16 +304,16 @@ void *mm_realloc(void *ptr, size_t size)
 		else 
 		{
 			size_t extra_space = old_size - new_size; /* because old_size and new_size are both DWORD-Aligned, extra-space is a multiple of DWORD */
-			size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
-			size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
-			if (extra_space < DWORD) {return ptr;} /* reduction in size too little to make any changes */
-			else if (prev_alloc && next_alloc && (extra_space < 2*DWORD)) {return ptr;} /* no free neighbours and extra space less than minimum block size */
+			size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(ptr)));
+			size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(ptr)));
+			if (extra_space < DSIZE) {return ptr;} /* reduction in size too little to make any changes */
+			else if (prev_alloc && next_alloc && (extra_space < 2*DSIZE)) {return ptr;} /* no free neighbours and extra space less than minimum block size */
 			else if (!next_alloc) /* give extra space to next block */
 			{
 				PUT(HDRP(ptr), PACK(new_size, 1));
 				PUT((ptr + new_size - DSIZE), PACK(new_size, 1));
 				PUT((ptr + new_size - WSIZE), PACK(old_next_size + extra_space, 0));
-				PUT((FTRP(NEXT_BLKP(ptr)), PACK(old_next_size + extra_space, 0));
+				PUT(FTRP(NEXT_BLKP(ptr)), PACK(old_next_size + extra_space, 0));
 				return ptr;
 			}
 			else if (!prev_alloc) /* copy data into free previous block so that data is not lost before being copied, free block is now moved forward */
