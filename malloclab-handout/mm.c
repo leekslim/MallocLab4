@@ -145,7 +145,7 @@ static void *free3 = NULL; /* pointer to free blocks with payload (5 to 8)*DSIZE
 static void *free4 = NULL; /* pointer to free blocks with payload (9 to infinity)*DSIZE */
 
 /* PRIVATE STATIC FUNCTIONS */
-/* add to appropriate free list */
+/* add to appropriate free list for simple case of freeing a new block at the end of the heap */
 static unsigned int LIFO_add(char* bp, size_t size) //argument passed INCLUDES overhead! returns the list no. it was added to
 { // can probably use a switch statement but it might bug out
 	if (size > 9) // 10 DSIZE or above, 
@@ -185,6 +185,72 @@ static unsigned int LIFO_add(char* bp, size_t size) //argument passed INCLUDES o
 	}
 }
 
+/* remove from appropriate free list */
+static void LIFO_remove(char* bp)
+{
+	size_t size = GET_SIZE(HDRP(bp));
+	if(size > 9)
+	{	
+		if(free4 != bp) // check if NOT last entry in list
+		{ 
+			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp); //prev field of next free block now has prev field of block about to be removed
+		}
+		if(PREV_FREE_BLOCK(bp) != NULL) // check if NOT first entry in list
+		{
+			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); //next field of prev free block now has next field of block about to be removed
+		}
+		free4 = PREV_FREE_BLOCK(bp);
+	}
+	else if(size > 5)
+	{	
+		if(free3 != bp) // check if NOT last entry in list
+		{ 
+			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp); //prev field of next free block now has prev field of block about to be removed
+		}
+		if(PREV_FREE_BLOCK(bp) != NULL) // check if NOT first entry in list
+		{
+			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); //next field of prev free block now has next field of block about to be removed
+		}
+		free3 = PREV_FREE_BLOCK(bp);
+	}
+	else if(size > 3)
+	{	
+		if(free2 != bp) // check if NOT last entry in list
+		{ 
+			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp); //prev field of next free block now has prev field of block about to be removed
+		}
+		if(PREV_FREE_BLOCK(bp) != NULL) // check if NOT first entry in list
+		{
+			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); //next field of prev free block now has next field of block about to be removed
+		}
+		free2 = PREV_FREE_BLOCK(bp);
+	}
+	else if(size > 2)
+	{	
+		if(free1 != bp) // check if NOT last entry in list
+		{ 
+			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp); //prev field of next free block now has prev field of block about to be removed
+		}
+		if(PREV_FREE_BLOCK(bp) != NULL) // check if NOT first entry in list
+		{
+			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); //next field of prev free block now has next field of block about to be removed
+		}
+		free1 = PREV_FREE_BLOCK(bp);
+	}
+	else
+	{	
+		if(free0 != bp) // check if NOT last entry in list
+		{ 
+			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp); //prev field of next free block now has prev field of block about to be removed
+		}
+		if(PREV_FREE_BLOCK(bp) != NULL) // check if NOT first entry in list
+		{
+			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); //next field of prev free block now has next field of block about to be removed
+		}
+		free0 = PREV_FREE_BLOCK(bp);
+	}
+}
+
 /* checks for all cases when a block is freed and performs correct coalesce */
 static unsigned int coalesce(void *bp) 
 {
@@ -195,27 +261,33 @@ static unsigned int coalesce(void *bp)
 		return LIFO_add(bp, size);
 	}
 
-	else if (prev_alloc && !next_alloc) {		/* Case 2: coalesce with next block */
+	else if (prev_alloc && !next_alloc) {		/* Case 2: coalesce with next block, so remove next block from whatever list its on */
+		LIFO_remove(NEXT_BLKP(bp));
 		size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
 		PUT (HDRP(bp), PACK(size,0));
 		PUT (FTRP(bp), PACK(size,0));
+		return LIFO_add(bp, size);
 	}
 
-	else if (!prev_alloc && next_alloc) {		/* Case 3: coalesce with prev block */
+	else if (!prev_alloc && next_alloc) {		/* Case 3: coalesce with prev block, so remove prev block from whatever list its on */
+		LIFO_remove(PREV_BLKP(bp));
 		size += GET_SIZE(HDRP(PREV_BLKP(bp)));
 		PUT(FTRP(bp), PACK(size, 0));
 		PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
 		bp = PREV_BLKP(bp);
+		return LIFO_add(bp, size);
 	}
 
-	else {						/* Case 4: coalesce with both prev and next block*/
+	else {						/* Case 4: coalesce with both prev and next block, so remove both blocks from whatever lists they were on */
+		LIFO_remove(PREV_BLKP(bp));
+		LIFO_remove(NEXT_BLKP(bp));
 		size += GET_SIZE(HDRP(PREV_BLKP(bp))) +
 				GET_SIZE(FTRP(NEXT_BLKP(bp)));
 		PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
 		PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
 		bp = PREV_BLKP(bp);
+		return LIFO_add(bp, size);
 	}
-	return bp;
 }
 
 /* extends the heap, checks if enough memory available, and whether size requested is aligned */
