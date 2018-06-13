@@ -303,12 +303,13 @@ static unsigned int coalesce(void *bp)
 	size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
 	size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
 	size_t free_size = GET_SIZE(HDRP(bp));
-	if (prev_alloc && next_alloc) {			/* Case 1: no coalesce required, no changes to other free lists */	
+	/* Case 1: no coalesce required, no changes to other free lists */
+	if (prev_alloc && next_alloc) {							
 		mm_check();
 		return LIFO_add(bp, free_size);
 	}
-
-	else if (prev_alloc && !next_alloc) {		/* Case 2: coalesce with next block, so remove next block from whatever list its on */
+	/* Case 2: coalesce with next block, so remove next block from whatever list its on */
+	else if (prev_alloc && !next_alloc) {			
 		LIFO_remove(NEXT_BLKP(bp));
 		free_size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
 		PUT (HDRP(bp), PACK(free_size,0));
@@ -316,8 +317,8 @@ static unsigned int coalesce(void *bp)
 		mm_check();
 		return LIFO_add(bp, free_size);
 	}
-
-	else if (!prev_alloc && next_alloc) {		/* Case 3: coalesce with prev block, so remove prev block from whatever list its on */
+	/* Case 3: coalesce with prev block, so remove prev block from whatever list its on */
+	else if (!prev_alloc && next_alloc) {
 		LIFO_remove(PREV_BLKP(bp));
 		free_size += GET_SIZE(HDRP(PREV_BLKP(bp)));
 		PUT(FTRP(bp), PACK(free_size, 0));
@@ -326,8 +327,8 @@ static unsigned int coalesce(void *bp)
 		mm_check();
 		return LIFO_add(bp, free_size);
 	}
-
-	else {						/* Case 4: coalesce with both prev and next block, so remove both blocks from whatever lists they were on */
+	/* Case 4: coalesce with both prev and next block, so remove both blocks from whatever lists they were on */
+	else {								
 		LIFO_remove(PREV_BLKP(bp));
 		LIFO_remove(NEXT_BLKP(bp));
 		free_size += GET_SIZE(HDRP(PREV_BLKP(bp))) +
@@ -361,36 +362,36 @@ static void *extend_heap(size_t words)
 }
 
 /* used by mm_malloc to find the best fitting block using LIFO policy on the segregated free lists, this function REMOVES the found fit from its list */
-static void *find_fit(size_t fit_size) // size argument being passed includes overhead
-{ // go from smallest to largest seg list to ensure best fit
+static void *find_fit(size_t fit_size) 			// size argument being passed includes overhead
+{ 												// go from smallest to largest seg list to ensure best fit
 	void *best_fit = NULL;
-	if((fit_size <= (2*DSIZE)) && free0) // DSIZE payload and free0 is not NULL
+	if((fit_size <= (2*DSIZE)) && free0) 		// DSIZE payload and free0 is not NULL
 	{
 		best_fit = free0;
 		LIFO_remove(free0);
 		return best_fit;
 	}
-	else if((fit_size <= (3*DSIZE)) && free1) // 2*DSIZE payload and free1 is not NULL
+	else if((fit_size <= (3*DSIZE)) && free1) 	// 2*DSIZE payload and free1 is not NULL
 	{
 		best_fit = free1;
 		LIFO_remove(free1);
 		return best_fit;
 	}
-	else if((fit_size <= (5*DSIZE)) && free2) // (3 to 4)*DSIZE payload and free2 is not NULL
+	else if((fit_size <= (5*DSIZE)) && free2) 	// (3 to 4)*DSIZE payload and free2 is not NULL
 	{
 		best_fit = free2;
 		LIFO_remove(free2);
 		return best_fit;
 	}
-	else if((fit_size <= (9*DSIZE)) && free3) // (5 to 8)*DSIZE payload and free3 is not NULL
+	else if((fit_size <= (9*DSIZE)) && free3) 	// (5 to 8)*DSIZE payload and free3 is not NULL
 	{
 		best_fit = free3;
 		LIFO_remove(free3);
 		return best_fit;
 	}
-	else if(free4 != NULL)// (9 or more)*DSIZE payload and free4 is not NULL
-	{
-		for(best_fit = free4; best_fit != NULL; best_fit = NEXT_FREE_BLOCK(best_fit)) // traverse list finding suitably sized chunk
+	else if(free4 != NULL)						// (9 or more)*DSIZE payload and free4 is not NULL
+	{											// traverse list finding suitably sized chunk
+		for(best_fit = free4; best_fit != NULL; best_fit = NEXT_FREE_BLOCK(best_fit)) 
 		{	if(GET_SIZE(HDRP(best_fit)) >= fit_size)
 			{
 				best_fit = free4;
@@ -398,7 +399,7 @@ static void *find_fit(size_t fit_size) // size argument being passed includes ov
 				return best_fit;
 			}
 		}
-		return NULL; /* no fit */
+		return NULL; 							/* no fit */
 	}
 	else return NULL; 
 }	
