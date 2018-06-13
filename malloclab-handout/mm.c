@@ -148,28 +148,28 @@ static void *free4 = NULL; /* pointer to free blocks with payload (9 to infinity
 /* add to appropriate free list for simple case of freeing a new block at the end of the heap */
 static unsigned int LIFO_add(char* bp, size_t size) //argument passed INCLUDES overhead! returns the list no. it was added to
 { // can probably use a switch statement but it might bug out
-	if (size > 9) // 10 DSIZE or above, 
+	if (size > (9 * DSIZE)) // 10 DSIZE or above, 
 	{
 		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free4), bp); //change next field of old 'last-in' to new 'last-in'
 		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free4); //set prev field of new 'last-in' to old 'last-in'
 		free4 = bp; //set list pointer to new 'last-in'
 		return 4;
 	}
-	else if (size > 5) // 6 to 9 DSIZE or above, 
+	else if (size > (5 * DSIZE)) // 6 to 9 DSIZE or above, 
 	{
 		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free3), bp); //change next field of old 'last-in' to new 'last-in'
 		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free3); //set prev field of new 'last-in' to old 'last-in'
 		free3 = bp; //set list pointer to new 'last-in'
 		return 3;
 	}
-	else if (size > 3) // 4 to 5 DSIZE or above, 
+	else if (size > (3 * DSIZE)) // 4 to 5 DSIZE or above, 
 	{
 		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free2), bp); //change next field of old 'last-in' to new 'last-in'
 		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free2); //set prev field of new 'last-in' to old 'last-in'
 		free2 = bp; //set list pointer to new 'last-in'
 		return 2;
 	}
-	else if (size > 2) //  3 DSIZE, 
+	else if (size > (2 * DSIZE)) //  3 DSIZE, 
 	{
 		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free1), bp); //change next field of old 'last-in' to new 'last-in'
 		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free1); //set prev field of new 'last-in' to old 'last-in'
@@ -189,7 +189,7 @@ static unsigned int LIFO_add(char* bp, size_t size) //argument passed INCLUDES o
 static void LIFO_remove(char* bp)
 {
 	size_t size = GET_SIZE(HDRP(bp));
-	if(size > 9)
+	if(size > (9 * DSIZE))
 	{	
 		if(free4 != bp) // check if NOT last entry in list
 		{ 
@@ -201,7 +201,7 @@ static void LIFO_remove(char* bp)
 		}
 		free4 = PREV_FREE_BLOCK(bp);
 	}
-	else if(size > 5)
+	else if(size > (5 * DSIZE))
 	{	
 		if(free3 != bp) // check if NOT last entry in list
 		{ 
@@ -213,7 +213,7 @@ static void LIFO_remove(char* bp)
 		}
 		free3 = PREV_FREE_BLOCK(bp);
 	}
-	else if(size > 3)
+	else if(size > (3 * DSIZE))
 	{	
 		if(free2 != bp) // check if NOT last entry in list
 		{ 
@@ -225,7 +225,7 @@ static void LIFO_remove(char* bp)
 		}
 		free2 = PREV_FREE_BLOCK(bp);
 	}
-	else if(size > 2)
+	else if(size > (2 * DSIZE))
 	{	
 		if(free1 != bp) // check if NOT last entry in list
 		{ 
@@ -251,7 +251,7 @@ static void LIFO_remove(char* bp)
 	}
 }
 
-/* checks for all cases when a block is freed and performs correct coalesce */
+/* checks for all cases when a block is freed and performs correct coalesce, returns the free list no. new free block was added to */
 static unsigned int coalesce(void *bp) 
 {
 	size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
@@ -309,18 +309,42 @@ static void *extend_heap(size_t words)
 	return coalesce(bp);
 }
 
-/* used by mm_malloc to find fit*/
-static void *find_fit(size_t asize)
-{
-	/* first-fit search */
-	void *bp = firstbp; /* returns pointer to start of prologue, adds prologue to go to first byte to actual heap start */
-	for (; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-		if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
-			return bp;
-		}
+/* used by mm_malloc to find the best fitting block using LIFO policy on the segregated free lists, this function REMOVES the found fit from its list */
+static void *find_fit(size_t size) // size argument being passed includes overhead
+{ // go from smallest to largest seg list to ensure best fit
+	void *best_fit = NULL;
+	if((size <= (2*DSIZE)) && free0) // DSIZE payload and free0 is not NULL
+	{
+		best_fit = free0;
+		LIFO_remove(free0);
+		return best_fit;
 	}
-	return NULL; /* No fit */
-}
+	else if((size <= (3*DSIZE)) && free1) // 2*DSIZE payload and free1 is not NULL
+	{
+		best_fit = free1;
+		LIFO_remove(free1);
+		return best_fit;
+	}
+	else if((size <= (5*DSIZE)) && free2) // (3 to 4)*DSIZE payload and free2 is not NULL
+	{
+		best_fit = free2;
+		LIFO_remove(free2);
+		return best_fit;
+	}
+	else if((size <= (9*DSIZE)) && free3) // (5 to 8)*DSIZE payload and free3 is not NULL
+	{
+		best_fit = free3;
+		LIFO_remove(free3);
+		return best_fit;
+	}
+	else if((size <= (3*DSIZE)) && free4) // (9 or more)*DSIZE payload and free4 is not NULL
+	{
+		best_fit = free4;
+		LIFO_remove(free4);
+		return best_fit;
+	}
+	else {return NULL;} /* no fit */
+}	
 
 /* used by mm_malloc to do actual allocation by placing size and allocated bits, memory pointer in*/ 
 static void place(void *bp, size_t asize)
@@ -375,6 +399,7 @@ int mm_init(void)
 	/* extend the empty heap with a free block of CHUNKSIZE bytes */
 	if (extend_heap(CHUNKSIZE/WSIZE) == NULL) {return -1;}
 	firstbp = heap_listp - WSIZE; /* changes global variable pointing to first block after prologue*/
+	free4 = firstbp; /* add new empty heap to free4 list */
     return 0;
 }
 
