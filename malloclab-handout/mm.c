@@ -136,7 +136,8 @@ team_t team = {
 #define PTR_TO_NEXT_FREE_BLOCK(ptr) ((char *)(ptr) + WSIZE)
 
 /* static global scalars */
-static void *firstbp = NULL; /* points to the first block past the prologue after initializing*/
+static void *firstbp = NULL; /* points to the first block past the prologue after initializing */
+static void *lastbp = NULL; /* points to epilogue block */
 /* the following are pointers to the last added pointer to that free list based on powers of 2 * DSIZE */
 static void *free0 = NULL; /* pointer to free blocks with payload 1*DSIZE */
 static void *free1 = NULL; /* pointer to free blocks with payload 2*DSIZE */
@@ -146,13 +147,16 @@ static void *free4 = NULL; /* pointer to free blocks with payload (9 to infinity
 
 /* PRIVATE STATIC FUNCTIONS */
 /* add to appropriate free list for simple case of freeing a new block at the end of the heap */
-static unsigned int LIFO_add(char* bp, size_t size) //argument passed INCLUDES overhead! returns the list no. it was added to
+static unsigned int LIFO_add(void* bp, size_t size) //argument passed INCLUDES overhead! returns the list no. it was added to
 { // can probably use a switch statement but it might bug out
 	if (size > (9 * DSIZE)) // 10 DSIZE or above, 
 	{
 		if(free4 != NULL) // check if list empty
-		{PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free4), bp);} //change next field of old 'last-in' to new 'last-in'
-		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free4); //set prev field of new 'last-in' to old 'last-in'
+		{
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free4), bp); //change next field of old 'last-in' to new 'last-in'
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free4);  //set prev field of new 'last-in' to old 'last-in'
+		}
+		else {PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), NULL);} //else set prev field of new 'last-in' to null
 		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); //set next field of new 'last-in' to Null
 		free4 = bp; //set list pointer to new 'last-in'
 		return 4;
@@ -160,8 +164,11 @@ static unsigned int LIFO_add(char* bp, size_t size) //argument passed INCLUDES o
 	else if (size > (5 * DSIZE)) // 6 to 9 DSIZE or above, 
 	{
 		if(free3 != NULL) // check if list empty
-		{PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free3), bp);} //change next field of old 'last-in' to new 'last-in'
-		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free3); //set prev field of new 'last-in' to old 'last-in'
+		{
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free3), bp); //change next field of old 'last-in' to new 'last-in'
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free3);  //set prev field of new 'last-in' to old 'last-in'
+		}
+		else {PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), NULL);} //else set prev field of new 'last-in' to null
 		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); //set next field of new 'last-in' to Null
 		free3 = bp; //set list pointer to new 'last-in'
 		return 3;
@@ -169,8 +176,11 @@ static unsigned int LIFO_add(char* bp, size_t size) //argument passed INCLUDES o
 	else if (size > (3 * DSIZE)) // 4 to 5 DSIZE or above, 
 	{
 		if(free2 != NULL) // check if list empty
-		{PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free2), bp);} //change next field of old 'last-in' to new 'last-in'
-		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free2); //set prev field of new 'last-in' to old 'last-in'
+		{
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free2), bp); //change next field of old 'last-in' to new 'last-in'
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free2);  //set prev field of new 'last-in' to old 'last-in'
+		}
+		else {PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), NULL);} //else set prev field of new 'last-in' to null
 		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); //set next field of new 'last-in' to Null
 		free2 = bp; //set list pointer to new 'last-in'
 		return 2;
@@ -178,8 +188,11 @@ static unsigned int LIFO_add(char* bp, size_t size) //argument passed INCLUDES o
 	else if (size > (2 * DSIZE)) //  3 DSIZE, 
 	{
 		if(free1 != NULL) // check if list empty
-		{PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free1), bp);} //change next field of old 'last-in' to new 'last-in'
-		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free1); //set prev field of new 'last-in' to old 'last-in'
+		{
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free1), bp); //change next field of old 'last-in' to new 'last-in'
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free1);  //set prev field of new 'last-in' to old 'last-in'
+		}
+		else {PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), NULL);} //else set prev field of new 'last-in' to null
 		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); //set next field of new 'last-in' to Null
 		free1 = bp; //set list pointer to new 'last-in'
 		return 1;
@@ -187,8 +200,11 @@ static unsigned int LIFO_add(char* bp, size_t size) //argument passed INCLUDES o
 	else // 1 DSIZE, 
 	{
 		if(free0 != NULL) // check if list empty
-		{PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free0), bp);} //change next field of old 'last-in' to new 'last-in'
-		PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free0); //set prev field of new 'last-in' to old 'last-in'
+		{
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free0), bp); //change next field of old 'last-in' to new 'last-in'
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free0);  //set prev field of new 'last-in' to old 'last-in'
+		}
+		else {PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), NULL);} //else set prev field of new 'last-in' to null
 		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); //set next field of new 'last-in' to Null
 		free0 = bp; //set list pointer to new 'last-in'
 		return 0;
@@ -196,12 +212,12 @@ static unsigned int LIFO_add(char* bp, size_t size) //argument passed INCLUDES o
 }
 
 /* remove from appropriate free list */
-static void LIFO_remove(char* bp)
+static void LIFO_remove(void* bp)
 {
 	size_t size = GET_SIZE(HDRP(bp));
 	if(size > (9 * DSIZE))
 	{	
-		if(free4 != bp) // check if NOT last entry in list
+		if(NEXT_FREE_BLOCK(bp) != NULL) // check if NOT last entry in list
 		{ 
 			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp); //prev field of next free block now has prev field of block about to be removed
 		}
@@ -213,7 +229,7 @@ static void LIFO_remove(char* bp)
 	}
 	else if(size > (5 * DSIZE))
 	{	
-		if(free3 != bp) // check if NOT last entry in list
+		if(NEXT_FREE_BLOCK(bp) != NULL) // check if NOT last entry in list
 		{ 
 			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp); //prev field of next free block now has prev field of block about to be removed
 		}
@@ -225,7 +241,7 @@ static void LIFO_remove(char* bp)
 	}
 	else if(size > (3 * DSIZE))
 	{	
-		if(free2 != bp) // check if NOT last entry in list
+		if(NEXT_FREE_BLOCK(bp) != NULL) // check if NOT last entry in list
 		{ 
 			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp); //prev field of next free block now has prev field of block about to be removed
 		}
@@ -237,7 +253,7 @@ static void LIFO_remove(char* bp)
 	}
 	else if(size > (2 * DSIZE))
 	{	
-		if(free1 != bp) // check if NOT last entry in list
+		if(NEXT_FREE_BLOCK(bp) != NULL) // check if NOT last entry in list
 		{ 
 			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp); //prev field of next free block now has prev field of block about to be removed
 		}
@@ -249,7 +265,7 @@ static void LIFO_remove(char* bp)
 	}
 	else
 	{	
-		if(free0 != bp) // check if NOT last entry in list
+		if(NEXT_FREE_BLOCK(bp) != NULL) // check if NOT last entry in list
 		{ 
 			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp); //prev field of next free block now has prev field of block about to be removed
 		}
@@ -267,7 +283,7 @@ static unsigned int coalesce(void *bp)
 	size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
 	size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
 	size_t size = GET_SIZE(HDRP(bp));
-	if (prev_alloc && next_alloc) {			/* Case 1: no coalesce required, no changes to other free lists */
+	if (prev_alloc && next_alloc) {			/* Case 1: no coalesce required, no changes to other free lists */	
 		return LIFO_add(bp, size);
 	}
 
@@ -298,6 +314,7 @@ static unsigned int coalesce(void *bp)
 		bp = PREV_BLKP(bp);
 		return LIFO_add(bp, size);
 	}
+	mm_check();
 }
 
 /* extends the heap, checks if enough memory available, and whether size requested is aligned */
@@ -308,13 +325,13 @@ static void *extend_heap(size_t words)
 	
 	/* allocate an even number of words to maintain alignment */
 	size = (words % 2) ? (words+1) * WSIZE : words * WSIZE;
-	if ((long)(bp = mem_sbrk(size)) == (-1)){return NULL;}
+	if ((long)(bp = mem_sbrk(size)) == (-1)){return NULL;} // check if support routine actually allocated space
 	
 	/* initialize free block header/footer and the epilogue header */
-	PUT(HDRP(bp), PACK(size, 0));		/* free block header */
+	PUT(HDRP(bp), PACK(size, 0));		/* free block header converts previous epilogue block as its new header */ 
 	PUT(FTRP(bp), PACK(size, 0));		/* free block footer */
 	PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));	/* new epilogue header */
-	
+	lastbp = NEXT_BLKP(bp);
 	/* coalesce if the previous block was free, also performs LIFO_add */
 	coalesce(bp);
 	return bp;
@@ -405,23 +422,23 @@ static void copy_block(void *src, void *dest)
 int mm_init(void)
 {
 	/* create the initial empty heap, mem_sbrk returns a generic pointer to the start of the heap, so heap_listp currently holds it */
-	void *heap_listp = mem_sbrk(4*WSIZE);
-	if (heap_listp == (void *)(-1)){ return -1;}/* L: not entirely sure what this is checking for */
-	PUT(heap_listp, 0); /* for alignment */
-	heap_listp += WSIZE;
-	PUT(heap_listp, PACK(DSIZE, 1)); /* prologue header */
-	heap_listp += WSIZE;
-	PUT(heap_listp, PACK(DSIZE, 1)); /* prologue footer */
-	heap_listp += WSIZE;
-	PUT(heap_listp, PACK(0, 1)); /* epiprologue header */
+	firstbp = mem_sbrk(4*WSIZE);
+	if (firstbp == (void *)(-1)){ return -1;}/* check if mem is full and support routine produced error */
+	PUT(firstbp, 0); /* for alignment */
+	firstbp += WSIZE;
+	PUT(firstbp, PACK(DSIZE, 1)); /* prologue header */
+	firstbp += WSIZE;
+	PUT(firstbp, PACK(DSIZE, 1)); /* prologue footer */
+	firstbp += WSIZE;
+	PUT(firstbp, PACK(0, 1)); /* epilogue header */
 	/* extend the empty heap with a free block of CHUNKSIZE bytes */
 	if (extend_heap(CHUNKSIZE/WSIZE) == NULL) {return -1;}
-	firstbp = heap_listp - WSIZE; /* changes global variable pointing to first block after prologue*/
 	free0 = NULL;
 	free1 = NULL;
 	free2 = NULL;
 	free3 = NULL;
 	free4 = firstbp; /* add new empty heap to free4 list */
+	mm_check();
     return 0;
 }
 
@@ -463,6 +480,7 @@ void *mm_malloc(size_t size)
 	if ((bp = extend_heap(extendsize/WSIZE)) == NULL) //extend_heap calls coalesce at the end, which performs necessary LIFO adds and removes
 		return NULL;
 	place(bp, asize);
+	mm_check();
 	return bp;
 }
 
@@ -474,7 +492,7 @@ void mm_free(void *bp)
 	size_t size = GET_SIZE(HDRP(bp));
 	PUT(HDRP(bp), PACK(size, 0));
 	PUT(FTRP(bp), PACK(size, 0));
-	unsigned int tmp = coalesce(bp);
+	coalesce(bp);
 }
 
 /*
@@ -585,7 +603,7 @@ void *mm_realloc(void *ptr, size_t size)
 				PUT(FTRP(ptr), PACK(new_size, 1));
 				PUT((ptr + new_size - WSIZE), PACK(new_next_size, 0));
 				PUT(FTRP(NEXT_BLKP(ptr)), PACK(new_next_size, 0));
-				unsigned int tmp = LIFO_add(NEXT_BLKP(ptr), new_next_size);
+				LIFO_add(NEXT_BLKP(ptr), new_next_size);
 				return ptr;
 			}
 			else if (!prev_alloc) /* copy data into free previous block so that data is not lost before being copied, free block is now moved forward */
@@ -599,7 +617,7 @@ void *mm_realloc(void *ptr, size_t size)
 				PUT(HDRP(new_ptr), PACK(new_size, 1));
 				PUT(FTRP(new_ptr), PACK(new_size, 1));
 				PUT(HDRP(NEXT_BLKP(new_ptr)), PACK(new_next_size, 0));
-				unsigned int tmp = LIFO_add(NEXT_BLKP(new_ptr), new_next_size);
+				LIFO_add(NEXT_BLKP(new_ptr), new_next_size);
 				return new_ptr;
 			}
 			else { /* no free neighbours but extra space enough to split block in 2, basically the first half of place function */
@@ -607,7 +625,7 @@ void *mm_realloc(void *ptr, size_t size)
 				PUT(FTRP(ptr), PACK(new_size, 1));
 				PUT(HDRP(NEXT_BLKP(ptr)), PACK(extra_space, 0));
 				PUT(FTRP(NEXT_BLKP(ptr)), PACK(extra_space, 0));
-				unsigned int tmp = LIFO_add(NEXT_BLKP(ptr), extra_space);
+				LIFO_add(NEXT_BLKP(ptr), extra_space);
 				return ptr;
 			}
 		}
@@ -617,15 +635,16 @@ void *mm_realloc(void *ptr, size_t size)
 /*
 * L: Heap Checker as per instructions, should be called at various points to check heap
 */
-/*
+
 int mm_check(void) {
 	int x=1; // initialize non-zero value, should return 0 if error, and print error messages before that 
 	void *ptr;
     int number_of_free_blocks = 0;
     int number_of_free_blocks_in_seg_list = 0;
+	void *seg_list_traverse = NULL; 
 
     // Verify prologue 
-    ptr = firstbp;      // pointer to the start of the heap link list 
+    ptr = firstbp - 3 * WSIZE;      // pointer to the start of the heap link list 
     if ((GET_SIZE(ptr) != DSIZE) || (GET_ALLOC(ptr) != 1)) {
         printf("Addr: %p - Prologue header error** \n", ptr);
 		x=0;
@@ -635,7 +654,7 @@ int mm_check(void) {
         printf("Addr: %p - Prologue footer error** \n", ptr);
 		x=0;
     }
-    ptr += 2 * WSIZE; // set pointer to the next block
+    ptr = firstbp; // set pointer to first block
 
     // Iterating through entire heap. Convoluted code checks that
     // we are not at the epilogue. Loops thr and checks epilogue block! 
@@ -644,14 +663,14 @@ int mm_check(void) {
 	        printf("Addr: %p - Header and footer size do not match\n", ptr);
 			x=0;
 	    }
-    	// Check each block's address alignment 
+    	/* Check each block's address alignment 
     	if (ALIGN((size_t) ptr) != (size_t)ptr) {
     		printf("Addr: %p - Block Alignment Error** \n", ptr);
 			x=0;
-    	}
+    	}*/
     	// Each block's bounds check 
-    	if ((ptr > top_of_heap) || (ptr < starting_addr_of_heap)) {
-    		printf("Addr: %p - Not within heap, top: %p, start: %p\n", ptr, top_of_heap, starting_addr_of_heap);
+    	if ((ptr > lastbp) || (ptr < firstbp)) {
+    		printf("Addr: %p - Not within heap, top: %p, start: %p\n", ptr, lastbp, firstbp);
 			x=0;
     	}
 	    // Check if minimum block size met 
@@ -668,10 +687,41 @@ int mm_check(void) {
             printf("Addr: %p - ** Coalescing Error** \n", ptr);
 			x=0;
         }
-        // Count number of free blocks 
+        // Count total number of free blocks 
         if (!(GET_ALLOC(HDRP(ptr))))
 		{number_of_free_blocks ++;}
         ptr = NEXT_BLKP(ptr); // go to next pointer
     }
+	printf("The total number of free blocks is: %d \n", number_of_free_blocks);
+	// Count total number of free blocks within seg lists
+	for(seg_list_traverse = free0; seg_list_traverse != NULL; seg_list_traverse = NEXT_FREE_BLOCK(seg_list_traverse))
+	{
+		number_of_free_blocks_in_seg_list++;
+	}
+	printf("The total number of free blocks in free0 is: %d \n", number_of_free_blocks_in_seg_list);
+	number_of_free_blocks_in_seg_list = 0;
+	for(seg_list_traverse = free1; seg_list_traverse != NULL; seg_list_traverse = NEXT_FREE_BLOCK(seg_list_traverse))
+	{
+		number_of_free_blocks_in_seg_list++;
+	}
+	printf("The total number of free blocks in free1 is: %d \n", number_of_free_blocks_in_seg_list);
+	number_of_free_blocks_in_seg_list = 0;
+	for(seg_list_traverse = free2; seg_list_traverse != NULL; seg_list_traverse = NEXT_FREE_BLOCK(seg_list_traverse))
+	{
+		number_of_free_blocks_in_seg_list++;
+	}
+	printf("The total number of free blocks in free2 is: %d \n", number_of_free_blocks_in_seg_list);
+	number_of_free_blocks_in_seg_list = 0;
+	for(seg_list_traverse = free3; seg_list_traverse != NULL; seg_list_traverse = NEXT_FREE_BLOCK(seg_list_traverse))
+	{
+		number_of_free_blocks_in_seg_list++;
+	}
+	printf("The total number of free blocks in free3 is: %d \n", number_of_free_blocks_in_seg_list);
+	number_of_free_blocks_in_seg_list = 0;
+	for(seg_list_traverse = free4; seg_list_traverse != NULL; seg_list_traverse = NEXT_FREE_BLOCK(seg_list_traverse))
+	{
+		number_of_free_blocks_in_seg_list++;
+	}
+	printf("The total number of free blocks in free4 is: %d \n", number_of_free_blocks_in_seg_list);
 	return x;
-}*/
+}
