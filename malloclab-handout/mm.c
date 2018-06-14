@@ -104,7 +104,7 @@ team_t team = {
 /*  based on minimum block size 8 */
 #define WSIZE 4 // size of the header and footer
 #define DSIZE 8 // regular or default block size
-#define CHUNKSIZE 1<<12 // when extending heap
+#define CHUNKSIZE 512 // when extending heap
 #define MAX(x, y) ((x) > (y)? (x) : (y))
 
 /* pack size bit and allocated bit into same word */
@@ -113,7 +113,7 @@ team_t team = {
 /* read or write to mem addr p */
 #define GET(p)	(* (unsigned int *)(p))
 #define PUT(p, val)	(*(unsigned int *)(p) = (val))
-#define PUT_PTR(p, ptr) (*(char **)(p) = (ptr)) // writing to the prev and next fields of free blocks
+#define PUT_PTR(p, ptr) (*(char **)(p) = (ptr)) // accepts pointer to prev and next fields and writes a pointer to it
 
 /* given addr p, read size bit or allocated bit */
 #define GET_SIZE(p)	(GET(p) & ~0x7) // the block size encapsulated in the first WSIZE-3 bits includes the payload, header and footer
@@ -127,7 +127,7 @@ team_t team = {
 #define NEXT_BLKP(bp)	((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
 #define PREV_BLKP(bp)	((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
-/* Pointer to pointer of free block's previous and next on the segregated list. */
+/* returns pointer to previous or next free block */
 #define PREV_FREE_BLOCK(ptr) (*(char **)(ptr)) // dereference a pointer to a character pointer, thereby getting the character pointer (prev free)
 #define NEXT_FREE_BLOCK(ptr) (*(char **)(PTR_TO_NEXT_FREE_BLOCK(ptr)))
 
@@ -342,8 +342,8 @@ static void *coalesce(void *bp_freeing)
 	else if (prev_alloc && !next_alloc) {			
 		LIFO_remove(NEXT_BLKP(bp_freeing));
 		free_size += GET_SIZE(HDRP(NEXT_BLKP(bp_freeing)));
-		PUT (HDRP(bp_freeing), PACK(free_size,0));
-		PUT (FTRP(bp_freeing), PACK(free_size,0));
+		PUT(HDRP(bp_freeing), PACK(free_size,0));
+		PUT(FTRP(bp_freeing), PACK(free_size,0));
 		//mm_check ();
 		LIFO_add(curr, free_size);
 		return curr;
@@ -353,8 +353,8 @@ static void *coalesce(void *bp_freeing)
 		LIFO_remove(PREV_BLKP(bp_freeing));
 		free_size += GET_SIZE(HDRP(PREV_BLKP(bp_freeing)));
 		PUT(FTRP(bp_freeing), PACK(free_size, 0));
-		PUT(HDRP(PREV_BLKP(bp_freeing)), PACK(free_size, 0));
 		curr = PREV_BLKP(bp_freeing);
+		PUT(HDRP(curr), PACK(free_size, 0));
 		//mm_check ();
 		LIFO_add(curr, free_size);
 		return curr;
@@ -363,10 +363,10 @@ static void *coalesce(void *bp_freeing)
 	else {								
 		LIFO_remove(PREV_BLKP(bp_freeing));
 		LIFO_remove(NEXT_BLKP(bp_freeing));
-		free_size += GET_SIZE(HDRP(PREV_BLKP(bp_freeing))) + GET_SIZE(FTRP(NEXT_BLKP(bp_freeing)));
-		PUT(HDRP(PREV_BLKP(bp_freeing)), PACK(free_size, 0));
-		PUT(FTRP(NEXT_BLKP(bp_freeing)), PACK(free_size, 0));
+		free_size += GET_SIZE(HDRP(PREV_BLKP(bp_freeing))) + GET_SIZE(HDRP(NEXT_BLKP(bp_freeing)));
 		curr = PREV_BLKP(bp_freeing);
+		PUT(HDRP(curr), PACK(free_size, 0));
+		PUT(FTRP(NEXT_BLKP(bp_freeing)), PACK(free_size, 0));
 		//mm_check ();
 		LIFO_add(curr, free_size);
 		return curr;
@@ -397,7 +397,7 @@ static void *extend_heap(size_t words)
 static void *find_fit(size_t fit_size) 			// size argument being passed includes overhead
 { 												// go from smallest to largest seg list to ensure best fit
 	void *best_fit = NULL;
-	if((fit_size <= (2*DSIZE)) && free0) 		// DSIZE payload and free0 is not NULL
+	if((fit_size == (2*DSIZE)) && free0) 		// DSIZE payload and free0 is not NULL
 	{
 		best_fit = free0;
 		return best_fit;
@@ -434,16 +434,17 @@ static void *find_fit(size_t fit_size) 			// size argument being passed includes
 /* used by mm_malloc to do actual allocation by placing size and allocated bits, memory pointer in; performs splitting if necessary*/ 
 static void place(void *bp, size_t asize)
 {
+	void *curr_p = bp;
 	size_t csize = GET_SIZE(HDRP(bp));
 	size_t split_size = csize - asize; //hypothetical split size, since asize and csize are 8 byte aligned, so will split size
 	LIFO_remove(bp); //ensure seg lists remove this
 	if ((split_size) >= (2*DSIZE)) {
 		PUT(HDRP(bp), PACK(asize, 1));
 		PUT(FTRP(bp), PACK(asize, 1));
-		bp = NEXT_BLKP(bp);
-		PUT(HDRP(bp), PACK(split_size, 0));
-		PUT(FTRP(bp), PACK(split_size, 0));
-		LIFO_add(bp, split_size);		// adds new split block in
+		curr_p = NEXT_BLKP(bp);
+		PUT(HDRP(curr_p), PACK(split_size, 0));
+		PUT(FTRP(curr_p), PACK(split_size, 0));
+		LIFO_add(curr_p, split_size);		// adds new split block in
 	}
 	else {
 		PUT(HDRP(bp), PACK(csize, 1));
@@ -476,6 +477,11 @@ int mm_init(void)
 	/* create the initial empty heap, mem_sbrk returns a generic pointer to the start of the heap, so heap_listp currently holds it */
 	void *heap_listp = mem_sbrk(4*WSIZE);
 	firstbp = heap_listp + 2*DSIZE;
+	free0 = NULL;
+	free1 = NULL;
+	free2 = NULL;
+	free3 = NULL;
+	free4 = NULL;
 	if (heap_listp == (void *)(-1)){ return -1;}/* check if mem is full and support routine produced error */
 	PUT(heap_listp, 0); /* for alignment */
 	heap_listp += WSIZE;
