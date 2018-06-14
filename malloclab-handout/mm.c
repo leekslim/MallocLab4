@@ -1,7 +1,38 @@
 /*
- * An implicit free list solution, every block includes a header and footer, and there are simple
- * functions to coalesce, split and free. Realloc does not do anything.
- */
+ * mm.c - malloc using the segregated free list method
+ * 
+ * Notes:
+ * 1. Every block has a header and a footer.
+ * 2. The header contains size and allocation flag. 
+ * 3. The footer contains size and allocation flag.
+
+ Block information:
+
+ 1. Allocated block has:
+ 	 a) Header is 32 bits long.  Header is actually located 4 bytes before the block pointer
+ 	     size in bit 3 to 31
+ 	     allocated flag in bit 0 (1 for true, 0 for false)
+
+     b) Payload and padding: variable size in 8 bytes increment.
+
+     c) Footer is 32 bits long
+ 	     size in bit 3 to 31
+ 	     allocated flag in bit 0 (1 for true, 0 for false)
+
+            <-------- Bits 31 to 3 ------ > 0
+            +================================+
+ptr-WSIZE-> | Header: size of the block   | A|
+   ptr ---> |--------------------------------|
+            : Payload, size is variable      :
+            : depending on size of block     :
+            : ...                            :
+            |--------------------------------|
+            | Footer: size of the block   | A|
+            +================================+
+            <-------- Bits 31 to 3 ------>  0
+
+
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -17,13 +48,13 @@
  ********************************************************/
 team_t team = {
     /* Team name */
-    "Evan and Leeks", /* L: didn't know what else to put */
+    "Evan and Leeks",
     /* First member's full name */
     "Li Keen 'Leeks' Lim",
     /* First member's email address */
     "lilim2019@u.northwestern.edu",
     /* Second member's full name (leave blank if none) */
-    "Evan Tang",
+    "Evan Patrick Tang",
     /* Second member's email address (leave blank if none) */
     "eptang@gmail.com"
 };
@@ -34,7 +65,7 @@ team_t team = {
 */
 
 /*  based on minimum block size 8 */
-#define WSIZE 4 // size of the header and footer
+#define WSIZE 4	// size of the header and footer
 #define DSIZE 8 // regular or default block size
 #define CHUNKSIZE 512 // when extending heap
 #define MAX(x, y) ((x) > (y)? (x) : (y))
@@ -343,13 +374,96 @@ void *mm_realloc(void *ptr, size_t size)
 }
 
 /*
-* L: Heap Checker as per instructions, should be called at various points to check heap
+* This heap checker has extra checking mechanisms for our later experimented with segregated free list, but it didn't work, so we didn't submit
+* that solution but we still have the heap checker.
 */
 
 int mm_check(void) {
-	int x=1; /*initialize non-zero value, should return 0 if error, and print error messages before that */
-	/* traverses headers and footers  to check size and alloc bits */
-	/* traverse to check for external fragmentation, i.e. missed coalesce */
-	/* checks for overlapping allocated blocks */
+	int x=1; // initialize non-zero value, should return 0 if error, and print error messages before that 
+	void *ptr;
+    int number_of_free_blocks = 0;
+    int number_of_free_blocks_in_seg_list = 0;
+	void *seg_list_traverse = NULL; 
+
+    // Verify prologue 
+    ptr = firstbp - 3 * WSIZE;      // pointer to the start of the heap link list 
+    if ((GET_SIZE(ptr) != DSIZE) || (GET_ALLOC(ptr) != 1)) {
+        printf("Addr: %p - Prologue header error** \n", ptr);
+		x=0;
+    }
+    ptr += WSIZE;
+    if ((GET_SIZE(ptr) != DSIZE) || (GET_ALLOC(ptr) != 1)) {
+        printf("Addr: %p - Prologue footer error** \n", ptr);
+		x=0;
+    }
+    ptr = firstbp; // set pointer to first block
+
+    // Iterating through entire heap. Convoluted code checks that
+    // we are not at the epilogue. Loops thr and checks epilogue block! 
+    while (GET_SIZE(HDRP(ptr)) > 0) {
+    	if (GET_SIZE(HDRP(ptr)) != GET_SIZE(FTRP(ptr))) {
+	        printf("Addr: %p - Header and footer size do not match\n", ptr);
+			x=0;
+	    }
+    	/* Check each block's address alignment 
+    	if (ALIGN((size_t) ptr) != (size_t)ptr) {
+    		printf("Addr: %p - Block Alignment Error** \n", ptr);
+			x=0;
+    	}*/
+    	// Each block's bounds check 
+    	if ((ptr > lastbp) || (ptr < firstbp)) {
+    		printf("Addr: %p - Not within heap, top: %p, start: %p\n", ptr, lastbp, firstbp);
+			x=0;
+    	}
+	    // Check if minimum block size met 
+        if (GET_SIZE(HDRP(ptr)) < (2*DSIZE)) {
+            printf("Addr: %p - ** Min Size Error ** \n", ptr);
+			x=0;
+        }
+	    if (GET_ALLOC(HDRP(ptr)) != GET_ALLOC(FTRP(ptr))) {
+    		printf("Addr: %p - ** Header and footer allocation flag do not match.\n", ptr);
+			x=0;
+    	}
+    	// Check coalescing: If alloc bit of current and next block is 0 
+        if (!GET_ALLOC(HDRP(ptr)) && (!GET_ALLOC(HDRP(NEXT_BLKP(ptr))))) {
+            printf("Addr: %p - ** Coalescing Error** \n", ptr);
+			x=0;
+        }
+        // Count total number of free blocks 
+        if (!(GET_ALLOC(HDRP(ptr))))
+		{number_of_free_blocks ++;}
+        ptr = NEXT_BLKP(ptr); // go to next pointer
+    }
+	printf("The total number of free blocks is: %d \n", number_of_free_blocks);
+	// Count total number of free blocks within seg lists
+	for(seg_list_traverse = free0; seg_list_traverse != NULL; seg_list_traverse = NEXT_FREE_BLOCK(seg_list_traverse))
+	{
+		number_of_free_blocks_in_seg_list++;
+	}
+	printf("The total number of free blocks in free0 is: %d \n", number_of_free_blocks_in_seg_list);
+	number_of_free_blocks_in_seg_list = 0;
+	for(seg_list_traverse = free1; seg_list_traverse != NULL; seg_list_traverse = NEXT_FREE_BLOCK(seg_list_traverse))
+	{
+		number_of_free_blocks_in_seg_list++;
+	}
+	printf("The total number of free blocks in free1 is: %d \n", number_of_free_blocks_in_seg_list);
+	number_of_free_blocks_in_seg_list = 0;
+	for(seg_list_traverse = free2; seg_list_traverse != NULL; seg_list_traverse = NEXT_FREE_BLOCK(seg_list_traverse))
+	{
+		number_of_free_blocks_in_seg_list++;
+	}
+	printf("The total number of free blocks in free2 is: %d \n", number_of_free_blocks_in_seg_list);
+	number_of_free_blocks_in_seg_list = 0;
+	for(seg_list_traverse = free3; seg_list_traverse != NULL; seg_list_traverse = NEXT_FREE_BLOCK(seg_list_traverse))
+	{
+		number_of_free_blocks_in_seg_list++;
+	}
+	printf("The total number of free blocks in free3 is: %d \n", number_of_free_blocks_in_seg_list);
+	number_of_free_blocks_in_seg_list = 0;
+	for(seg_list_traverse = free4; seg_list_traverse != NULL; seg_list_traverse = NEXT_FREE_BLOCK(seg_list_traverse))
+	{
+		number_of_free_blocks_in_seg_list++;
+	}
+	printf("The total number of free blocks in free4 is: %d \n", number_of_free_blocks_in_seg_list);
 	return x;
 }
