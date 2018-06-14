@@ -377,7 +377,7 @@ void *mm_realloc(void *ptr, size_t size)
 * This heap checker has extra checking mechanisms for our later experimented with segregated free list, but it didn't work, so we didn't submit
 * that solution but we still have the heap checker.
 */
-
+/*
 int mm_check(void) {
 	int x=1; // initialize non-zero value, should return 0 if error, and print error messages before that 
 	void *ptr;
@@ -405,11 +405,11 @@ int mm_check(void) {
 	        printf("Addr: %p - Header and footer size do not match\n", ptr);
 			x=0;
 	    }
-    	/* Check each block's address alignment 
+    	// Check each block's address alignment 
     	if (ALIGN((size_t) ptr) != (size_t)ptr) {
     		printf("Addr: %p - Block Alignment Error** \n", ptr);
 			x=0;
-    	}*/
+    	}
     	// Each block's bounds check 
     	if ((ptr > lastbp) || (ptr < firstbp)) {
     		printf("Addr: %p - Not within heap, top: %p, start: %p\n", ptr, lastbp, firstbp);
@@ -466,4 +466,4 @@ int mm_check(void) {
 	}
 	printf("The total number of free blocks in free4 is: %d \n", number_of_free_blocks_in_seg_list);
 	return x;
-}
+}*/
