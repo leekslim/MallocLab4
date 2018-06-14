@@ -113,7 +113,7 @@ team_t team = {
 /* read or write to mem addr p */
 #define GET(p)	(* (unsigned int *)(p))
 #define PUT(p, val)	(*(unsigned int *)(p) = (val))
-#define PUT_PTR(p, ptr) (*(char **)(p) = ptr) // writing to the prev and next fields of free blocks
+#define PUT_PTR(p, ptr) (*(char **)(p) = (ptr)) // writing to the prev and next fields of free blocks
 
 /* given addr p, read size bit or allocated bit */
 #define GET_SIZE(p)	(GET(p) & ~0x7) // the block size encapsulated in the first WSIZE-3 bits includes the payload, header and footer
@@ -146,66 +146,87 @@ static void *free3 = NULL; /* pointer to free blocks with payload (5 to 8)*DSIZE
 static void *free4 = NULL; /* pointer to free blocks with payload (9 to infinity)*DSIZE */
 
 /* PRIVATE STATIC FUNCTIONS */
+
 /* add to appropriate free list for simple case of freeing a new block at the end of the heap */
 static unsigned int LIFO_add(void* bp, size_t add_size) //argument passed INCLUDES overhead! returns the list no. it was added to
 { // can probably use a switch statement but it might bug out
 	if (add_size > (9 * DSIZE)) // 10 DSIZE or above, 
 	{
-		if(free4 != NULL) // check if list empty
+		if(free4) // check if list empty
 		{
-			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free4), bp); //change next field of old 'last-in' to new 'last-in'
-			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free4);  //set prev field of new 'last-in' to old 'last-in'
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free4), bp); 	//change next field of old 'last-in' to new 'last-in'
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free4);  	//set prev field of new 'last-in' to old 'last-in'
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); 		// set next field of new 'last-in' to NULL
 		}
-		else {PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), NULL);} //else set prev field of new 'last-in' to null
-		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); //set next field of new 'last-in' to Null
+		else 
+		{
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), NULL); 		//else set prev field of new 'last-in' to null
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); 		//set next field of new 'last-in' to Null
+		}
 		free4 = bp; //set list pointer to new 'last-in'
 		return 4;
 	}
 	else if (add_size > (5 * DSIZE)) // 6 to 9 DSIZE or above, 
 	{
-		if(free3 != NULL) // check if list empty
+		if(free3) // check if list empty
 		{
-			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free3), bp); //change next field of old 'last-in' to new 'last-in'
-			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free3);  //set prev field of new 'last-in' to old 'last-in'
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free3), bp); 	//change next field of old 'last-in' to new 'last-in'
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free3);  	//set prev field of new 'last-in' to old 'last-in'
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); 		// set next field of new 'last-in' to NULL
 		}
-		else {PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), NULL);} //else set prev field of new 'last-in' to null
-		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); //set next field of new 'last-in' to Null
+		else 
+		{
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), NULL); 		//else set prev field of new 'last-in' to null
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); 		//set next field of new 'last-in' to Null
+		}
 		free3 = bp; //set list pointer to new 'last-in'
 		return 3;
 	}
 	else if (add_size > (3 * DSIZE)) // 4 to 5 DSIZE or above, 
 	{
-		if(free2 != NULL) // check if list empty
+		if(free2) // check if list empty
 		{
-			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free2), bp); //change next field of old 'last-in' to new 'last-in'
-			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free2);  //set prev field of new 'last-in' to old 'last-in'
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free2), bp); 	//change next field of old 'last-in' to new 'last-in'
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free2);  	//set prev field of new 'last-in' to old 'last-in'
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); 		// set next field of new 'last-in' to NULL
 		}
-		else {PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), NULL);} //else set prev field of new 'last-in' to null
-		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); //set next field of new 'last-in' to Null
+		else 
+		{
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), NULL); 		//else set prev field of new 'last-in' to null
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); 		//set next field of new 'last-in' to Null
+		}
 		free2 = bp; //set list pointer to new 'last-in'
 		return 2;
 	}
 	else if (add_size > (2 * DSIZE)) //  3 DSIZE, 
 	{
-		if(free1 != NULL) // check if list empty
+		if(free1) // check if list empty
 		{
-			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free1), bp); //change next field of old 'last-in' to new 'last-in'
-			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free1);  //set prev field of new 'last-in' to old 'last-in'
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free1), bp); 	//change next field of old 'last-in' to new 'last-in'
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free1);  	//set prev field of new 'last-in' to old 'last-in'
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); 		// set next field of new 'last-in' to NULL
 		}
-		else {PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), NULL);} //else set prev field of new 'last-in' to null
-		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); //set next field of new 'last-in' to Null
+		else 
+		{
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), NULL); 		//else set prev field of new 'last-in' to null
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); 		//set next field of new 'last-in' to Null
+		}
 		free1 = bp; //set list pointer to new 'last-in'
 		return 1;
 	}
 	else // 1 DSIZE, 
 	{
-		if(free0 != NULL) // check if list empty
+		if(free0) // check if list empty
 		{
-			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free0), bp); //change next field of old 'last-in' to new 'last-in'
-			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free0);  //set prev field of new 'last-in' to old 'last-in'
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(free0), bp); 	//change next field of old 'last-in' to new 'last-in'
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), free0);  	//set prev field of new 'last-in' to old 'last-in'
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); 		// set next field of new 'last-in' to NULL
 		}
-		else {PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), NULL);} //else set prev field of new 'last-in' to null
-		PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); //set next field of new 'last-in' to Null
+		else 
+		{
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(bp), NULL); 		//else set prev field of new 'last-in' to null
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(bp), NULL); 		//set next field of new 'last-in' to Null
+		}
 		free0 = bp; //set list pointer to new 'last-in'
 		return 0;
 	}
@@ -215,87 +236,89 @@ static unsigned int LIFO_add(void* bp, size_t add_size) //argument passed INCLUD
 static void LIFO_remove(void* bp)
 {
 	size_t size = GET_SIZE(HDRP(bp));
+	void *next_free = NEXT_FREE_BLOCK(bp);
+	void *prev_free = PREV_FREE_BLOCK(bp);
 	if(size > (9 * DSIZE))
 	{	
-		if(NEXT_FREE_BLOCK(bp) == NULL) 								// if last entry on list,  
-		{ 																// shift list pointer to prev_free
-			free4 = PREV_FREE_BLOCK(bp); 								// note that if this is the only entry, it shifts to NULL
+		if(next_free == NULL) 										// if last entry on list,  
+		{ 															// shift list pointer to prev_free
+			free4 = prev_free; 										// note that if this is the only entry, it shifts to NULL
 		}
-		else 															// if not last entry,  note that this can shfit to NULL
-		{																// make next_free_block's "prev" field point to prev_free
-			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp);
+		else 														// if not last entry,  note that this can shfit to NULL
+		{															// make next_free_block's "prev" field point to prev_free
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(next_free), prev_free);
 		}
-		if(PREV_FREE_BLOCK(bp) != NULL) 								// if there is a PREV_FREE_BLOCK, 
-		{ 																// set its "next" field to next_free; 
-			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); // note that this can shift to NULL if this is the last entry;
+		if(prev_free) 												// if there is a PREV_FREE_BLOCK, 
+		{ 															// set its "next" field to next_free; 
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(prev_free), next_free); 	// note that this can shift to NULL if this is the last entry;
 			return;
 		}
 		return;
 	}
 	else if(size > (5 * DSIZE))
 	{	
-		if(NEXT_FREE_BLOCK(bp) == NULL) 								// if last entry on list,  
-		{ 																// shift list pointer to prev_free
-			free3 = PREV_FREE_BLOCK(bp); 								// note that if this is the only entry, it shifts to NULL
+		if(next_free == NULL) 										// if last entry on list,  
+		{ 															// shift list pointer to prev_free
+			free3 = prev_free; 										// note that if this is the only entry, it shifts to NULL
 		}
-		else 															// if not last entry,  note that this can shfit to NULL
-		{																// make next_free_block's "prev" field point to prev_free
-			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp);
+		else 														// if not last entry,  note that this can shfit to NULL
+		{															// make next_free_block's "prev" field point to prev_free
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(next_free), prev_free);
 		}
-		if(PREV_FREE_BLOCK(bp) != NULL) 								// if there is a PREV_FREE_BLOCK, 
-		{ 																// set its "next" field to next_free; 
-			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); // note that this can shift to NULL if this is the last entry;
+		if(prev_free) 												// if there is a PREV_FREE_BLOCK, 
+		{ 															// set its "next" field to next_free; 
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(prev_free), next_free); 	// note that this can shift to NULL if this is the last entry;
 			return;
 		}
 		return;
 	}
 	else if(size > (3 * DSIZE))
 	{	
-		if(NEXT_FREE_BLOCK(bp) == NULL) 								// if last entry on list,  
-		{ 																// shift list pointer to prev_free
-			free2 = PREV_FREE_BLOCK(bp); 								// note that if this is the only entry, it shifts to NULL
+		if(next_free == NULL) 										// if last entry on list,  
+		{ 															// shift list pointer to prev_free
+			free2 = prev_free; 										// note that if this is the only entry, it shifts to NULL
 		}
-		else 															// if not last entry,  note that this can shfit to NULL
-		{																// make next_free_block's "prev" field point to prev_free
-			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp);
+		else 														// if not last entry,  note that this can shfit to NULL
+		{															// make next_free_block's "prev" field point to prev_free
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(next_free), prev_free);
 		}
-		if(PREV_FREE_BLOCK(bp) != NULL) 								// if there is a PREV_FREE_BLOCK, 
-		{ 																// set its "next" field to next_free; 
-			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); // note that this can shift to NULL if this is the last entry;
+		if(prev_free) 												// if there is a PREV_FREE_BLOCK, 
+		{ 															// set its "next" field to next_free; 
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(prev_free), next_free); 	// note that this can shift to NULL if this is the last entry;
 			return;
 		}
 		return;
 	}
 	else if(size > (2 * DSIZE))
 	{	
-		if(NEXT_FREE_BLOCK(bp) == NULL) 								// if last entry on list,  
-		{ 																// shift list pointer to prev_free
-			free1 = PREV_FREE_BLOCK(bp); 								// note that if this is the only entry, it shifts to NULL
+		if(next_free == NULL) 										// if last entry on list,  
+		{ 															// shift list pointer to prev_free
+			free1 = prev_free; 										// note that if this is the only entry, it shifts to NULL
 		}
-		else 															// if not last entry,  note that this can shfit to NULL
-		{																// make next_free_block's "prev" field point to prev_free
-			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp);
+		else 														// if not last entry,  note that this can shfit to NULL
+		{															// make next_free_block's "prev" field point to prev_free
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(next_free), prev_free);
 		}
-		if(PREV_FREE_BLOCK(bp) != NULL) 								// if there is a PREV_FREE_BLOCK, 
-		{ 																// set its "next" field to next_free; 
-			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); // note that this can shift to NULL if this is the last entry;
+		if(prev_free) 												// if there is a PREV_FREE_BLOCK, 
+		{ 															// set its "next" field to next_free; 
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(prev_free), next_free); 	// note that this can shift to NULL if this is the last entry;
 			return;
 		}
 		return;
 	}
 	else
 	{	
-		if(NEXT_FREE_BLOCK(bp) == NULL) 								// if last entry on list,  
-		{ 																// shift list pointer to prev_free
-			free0 = PREV_FREE_BLOCK(bp); 								// note that if this is the only entry, it shifts to NULL
+		if(next_free == NULL) 										// if last entry on list,  
+		{ 															// shift list pointer to prev_free
+			free0 = prev_free; 										// note that if this is the only entry, it shifts to NULL
 		}
-		else 															// if not last entry,  note that this can shfit to NULL
-		{																// make next_free_block's "prev" field point to prev_free
-			PREV_FREE_BLOCK(NEXT_FREE_BLOCK(bp)) = PREV_FREE_BLOCK(bp);
+		else 														// if not last entry,  note that this can shfit to NULL
+		{															// make next_free_block's "prev" field point to prev_free
+			PUT_PTR(PTR_TO_PREV_FREE_BLOCK(next_free), prev_free);
 		}
-		if(PREV_FREE_BLOCK(bp) != NULL) 								// if there is a PREV_FREE_BLOCK, 
-		{ 																// set its "next" field to next_free; 
-			NEXT_FREE_BLOCK(PREV_FREE_BLOCK(bp)) = NEXT_FREE_BLOCK(bp); // note that this can shift to NULL if this is the last entry;
+		if(prev_free) 												// if there is a PREV_FREE_BLOCK, 
+		{ 															// set its "next" field to next_free; 
+			PUT_PTR(PTR_TO_NEXT_FREE_BLOCK(prev_free), next_free); 	// note that this can shift to NULL if this is the last entry;
 			return;
 		}
 		return;
@@ -303,50 +326,50 @@ static void LIFO_remove(void* bp)
 }
 
 /* checks for all cases when a block is freed and performs correct coalesce, returns the free list no. new free block was added to */
-static void *coalesce(void *bp) 
+static void *coalesce(void *bp_freeing) 
 {
-	size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
-	size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
-	size_t free_size = GET_SIZE(HDRP(bp));
+	void* curr = bp_freeing;
+	size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp_freeing)));
+	size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp_freeing)));
+	size_t free_size = GET_SIZE(HDRP(bp_freeing));
 	/* Case 1: no coalesce required, no changes to other free lists */
 	if (prev_alloc && next_alloc) {							
-		mm_check();
-		LIFO_add(bp, free_size);
-		return bp;
+		//mm_check ();
+		LIFO_add(curr, free_size);
+		return curr;
 	}
 	/* Case 2: coalesce with next block, so remove next block from whatever list its on */
 	else if (prev_alloc && !next_alloc) {			
-		LIFO_remove(NEXT_BLKP(bp));
-		free_size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
-		PUT (HDRP(bp), PACK(free_size,0));
-		PUT (FTRP(bp), PACK(free_size,0));
-		mm_check();
-		LIFO_add(bp, free_size);
-		return bp;
+		LIFO_remove(NEXT_BLKP(bp_freeing));
+		free_size += GET_SIZE(HDRP(NEXT_BLKP(bp_freeing)));
+		PUT (HDRP(bp_freeing), PACK(free_size,0));
+		PUT (FTRP(bp_freeing), PACK(free_size,0));
+		//mm_check ();
+		LIFO_add(curr, free_size);
+		return curr;
 	}
 	/* Case 3: coalesce with prev block, so remove prev block from whatever list its on */
 	else if (!prev_alloc && next_alloc) {
-		LIFO_remove(PREV_BLKP(bp));
-		free_size += GET_SIZE(HDRP(PREV_BLKP(bp)));
-		PUT(FTRP(bp), PACK(free_size, 0));
-		PUT(HDRP(PREV_BLKP(bp)), PACK(free_size, 0));
-		bp = PREV_BLKP(bp);
-		mm_check();
-		LIFO_add(bp, free_size);
-		return bp;
+		LIFO_remove(PREV_BLKP(bp_freeing));
+		free_size += GET_SIZE(HDRP(PREV_BLKP(bp_freeing)));
+		PUT(FTRP(bp_freeing), PACK(free_size, 0));
+		PUT(HDRP(PREV_BLKP(bp_freeing)), PACK(free_size, 0));
+		curr = PREV_BLKP(bp_freeing);
+		//mm_check ();
+		LIFO_add(curr, free_size);
+		return curr;
 	}
 	/* Case 4: coalesce with both prev and next block, so remove both blocks from whatever lists they were on */
 	else {								
-		LIFO_remove(PREV_BLKP(bp));
-		LIFO_remove(NEXT_BLKP(bp));
-		free_size += GET_SIZE(HDRP(PREV_BLKP(bp))) +
-				GET_SIZE(FTRP(NEXT_BLKP(bp)));
-		PUT(HDRP(PREV_BLKP(bp)), PACK(free_size, 0));
-		PUT(FTRP(NEXT_BLKP(bp)), PACK(free_size, 0));
-		bp = PREV_BLKP(bp);
-		mm_check();
-		LIFO_add(bp, free_size);
-		return bp;
+		LIFO_remove(PREV_BLKP(bp_freeing));
+		LIFO_remove(NEXT_BLKP(bp_freeing));
+		free_size += GET_SIZE(HDRP(PREV_BLKP(bp_freeing))) + GET_SIZE(FTRP(NEXT_BLKP(bp_freeing)));
+		PUT(HDRP(PREV_BLKP(bp_freeing)), PACK(free_size, 0));
+		PUT(FTRP(NEXT_BLKP(bp_freeing)), PACK(free_size, 0));
+		curr = PREV_BLKP(bp_freeing);
+		//mm_check ();
+		LIFO_add(curr, free_size);
+		return curr;
 	}
 }
 
@@ -377,34 +400,29 @@ static void *find_fit(size_t fit_size) 			// size argument being passed includes
 	if((fit_size <= (2*DSIZE)) && free0) 		// DSIZE payload and free0 is not NULL
 	{
 		best_fit = free0;
-		LIFO_remove(free0);
 		return best_fit;
 	}
 	else if((fit_size <= (3*DSIZE)) && free1) 	// 2*DSIZE payload and free1 is not NULL
 	{
 		best_fit = free1;
-		LIFO_remove(free1);
 		return best_fit;
 	}
 	else if((fit_size <= (5*DSIZE)) && free2) 	// (3 to 4)*DSIZE payload and free2 is not NULL
 	{
 		best_fit = free2;
-		LIFO_remove(free2);
 		return best_fit;
 	}
 	else if((fit_size <= (9*DSIZE)) && free3) 	// (5 to 8)*DSIZE payload and free3 is not NULL
 	{
 		best_fit = free3;
-		LIFO_remove(free3);
 		return best_fit;
 	}
-	else if(free4 != NULL)						// (9 or more)*DSIZE payload and free4 is not NULL
+	else if(free4)						// (9 or more)*DSIZE payload and free4 is not NULL
 	{											// traverse list finding suitably sized chunk
 		for(best_fit = free4; best_fit != NULL; best_fit = NEXT_FREE_BLOCK(best_fit)) 
 		{	if(GET_SIZE(HDRP(best_fit)) >= fit_size)
 			{
 				best_fit = free4;
-				LIFO_remove(free4);
 				return best_fit;
 			}
 		}
@@ -418,6 +436,7 @@ static void place(void *bp, size_t asize)
 {
 	size_t csize = GET_SIZE(HDRP(bp));
 	size_t split_size = csize - asize; //hypothetical split size, since asize and csize are 8 byte aligned, so will split size
+	LIFO_remove(bp); //ensure seg lists remove this
 	if ((split_size) >= (2*DSIZE)) {
 		PUT(HDRP(bp), PACK(asize, 1));
 		PUT(FTRP(bp), PACK(asize, 1));
@@ -467,7 +486,7 @@ int mm_init(void)
 	PUT(heap_listp, PACK(0, 1)); /* epilogue header, will become header of first block after coalesce */
 	/* extend the empty heap with a free block of CHUNKSIZE bytes */
 	if (extend_heap(CHUNKSIZE/WSIZE) == NULL) {return -1;}
-	mm_check();
+	//mm_check();
     return 0;
 }
 
@@ -499,8 +518,8 @@ void *mm_malloc(size_t size)
 	}
 	
 	/* search the free list for a fit */
-	if ((bp = find_fit(asize)) != NULL) { 	// note that find_fit performs the lifo_remove
-		place(bp, asize);					// and place lifo_adds if splitting occurs
+	if ((bp = find_fit(asize)) != NULL) { 
+		place(bp, asize);					// place performs lifo_remove on allocated block, and add if splitting occurs
 		return bp;
 	}
 
@@ -508,8 +527,8 @@ void *mm_malloc(size_t size)
 	extendsize = MAX(asize,CHUNKSIZE);
 	if ((bp = extend_heap(extendsize/WSIZE)) == NULL) //extend_heap calls coalesce at the end, which performs necessary LIFO adds and removes
 		return NULL;
-	place(bp, asize);
-	mm_check();
+	place(bp, asize); //performs LIFO add and remove on new allocated block
+	//mm_check ();
 	return bp;
 }
 
